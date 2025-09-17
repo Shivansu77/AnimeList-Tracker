@@ -1,0 +1,27 @@
+{
+  "name": "anime-tracker",
+  "version": "1.0.0",
+  "description": "MERN Stack Anime & TV Series Tracker",
+  "scripts": {
+    "install-backend": "cd backend && npm install",
+    "install-frontend": "cd frontend && npm install",
+    "install-all": "npm run install-backend && npm run install-frontend",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm start",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "anime",
+    "tracker",
+    "mern",
+    "react",
+    "mongodb"
+  ],
+  "author": "Anime Tracker Team",
+  "license": "MIT"
+}
