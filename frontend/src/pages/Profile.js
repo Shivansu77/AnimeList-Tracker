@@ -125,18 +125,18 @@ const Profile = () => {
         {tabValue === 0 && (
           <Box sx={{ p: 3 }}>
             <Grid container spacing={3}>
-              {watchlist.map((item) => (
+              {watchlist.filter(item => item.anime).map((item) => (
                 <Grid item xs={12} sm={6} md={4} key={item.anime._id}>
                   <Card sx={{ display: 'flex', height: '100%' }}>
                     <CardMedia
                       component="img"
                       sx={{ width: 100 }}
-                      image={item.anime.poster}
+                      image={item.anime?.poster || 'https://via.placeholder.com/100x140/f5f5f5/999?text=No+Image'}
                       alt={item.anime.title}
                     />
                     <CardContent sx={{ flex: '1 0 auto' }}>
                       <Typography component="div" variant="h6" noWrap>
-                        {item.anime.title}
+                        {item.anime?.title || 'Unknown Anime'}
                       </Typography>
                       <Chip 
                         label={item.status.replace('-', ' ')}
@@ -149,7 +149,7 @@ const Profile = () => {
                         sx={{ mb: 1, textTransform: 'capitalize' }}
                       />
                       <Typography variant="body2" color="text.secondary">
-                        Progress: {item.episodesWatched}/{item.anime.episodes}
+                        Progress: {item.episodesWatched || 0}/{item.anime?.episodes || 0}
                       </Typography>
                       {item.rating > 0 && (
                         <Typography variant="body2" color="text.secondary">

@@ -29,7 +29,7 @@ const Chatbot = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
-      text: "👋 Hi! I'm your personal anime assistant!\n\nI can help you with:\n• 🎯 Anime recommendations\n• 📚 Genre suggestions\n• 🏆 Best anime lists\n• 🔍 Finding your next watch\n\nWhat kind of anime are you looking for today?",
+      text: "🤔 I'm here to help you discover amazing anime! Try asking me about:\n\n• **Recommendations** - \"recommend me some anime\"\n• **Genres** - \"action anime\" or \"romance anime\"\n• **Specific needs** - \"gym anime\" or \"beginner anime\"\n• **Best lists** - \"best anime of all time\"\n\nWhat would you like to know about anime? 🎌",
       isBot: true,
       timestamp: new Date()
     }

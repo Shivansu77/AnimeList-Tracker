@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import Container from '@mui/material/Container';
+
 import { AuthProvider } from './context/AuthContext';
 import { WatchlistProvider } from './context/WatchlistContext';
+import { CustomThemeProvider, useTheme } from './context/ThemeContext';
 
 // Layout Components
 import Navbar from './components/layout/Navbar';
@@ -32,29 +31,18 @@ import Seasonal from './pages/Seasonal';
 import Recommendations from './pages/Recommendations';
 import LogoutHandler from './components/LogoutHandler';
 import Chatbot from './components/Chatbot';
+import ReminderNotifications from './components/ReminderNotifications';
+import Reminders from './pages/Reminders';
+import AdminEpisodes from './pages/AdminEpisodes';
+import AdminStreaming from './pages/AdminStreaming';
+import AdminAnimeForm from './pages/AdminAnimeForm';
+import SharedWatchlist from './pages/SharedWatchlist';
 
-function App() {
-  const [darkMode, setDarkMode] = useState(false);
-
-  const theme = createTheme({
-    palette: {
-      mode: darkMode ? 'dark' : 'light',
-      primary: {
-        main: '#7c4dff',
-      },
-      secondary: {
-        main: '#f50057',
-      },
-    },
-  });
-
+const AppContent = () => {
   return (
-    <AuthProvider>
-      <WatchlistProvider>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
-          <Container component="main" sx={{ pt: 8, pb: 8, minHeight: '100vh' }}>
+    <>
+      <Navbar />
+          <div style={{ paddingTop: '2rem', paddingBottom: '2rem', minHeight: '100vh' }}>
           <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/anime" element={<AnimeList />} />
@@ -73,16 +61,32 @@ function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/admin/add-anime" element={<AddAnime />} />
+          <Route path="/admin/episodes" element={<AdminEpisodes />} />
+          <Route path="/admin/streaming" element={<AdminStreaming />} />
+          <Route path="/admin/anime/add" element={<AdminAnimeForm />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/reminders" element={<Reminders />} />
+          <Route path="/watchlist/:shareToken" element={<SharedWatchlist />} />
           <Route path="/logout" element={<LogoutHandler />} />
           <Route path="*" element={<NotFound />} />
           </Routes>
-        </Container>
-          <Chatbot />
-          <Footer />
-        </ThemeProvider>
-      </WatchlistProvider>
-    </AuthProvider>
+        </div>
+        <ReminderNotifications />
+        <Chatbot />
+        <Footer />
+    </>
+  );
+};
+
+function App() {
+  return (
+    <CustomThemeProvider>
+      <AuthProvider>
+        <WatchlistProvider>
+          <AppContent />
+        </WatchlistProvider>
+      </AuthProvider>
+    </CustomThemeProvider>
   );
 }
 

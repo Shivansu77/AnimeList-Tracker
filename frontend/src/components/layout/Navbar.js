@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { reminderService } from '../../services/reminderService';
 import {
   AppBar,
   Box,
@@ -18,8 +19,9 @@ import {
 import { styled, alpha } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import SearchIcon from '@mui/icons-material/Search';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import { Badge } from '@mui/material';
+import ThemeToggle from '../ThemeToggle';
 
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -84,14 +86,11 @@ const settings = [
   { title: 'Logout', path: '/logout' }
 ];
 
-const Navbar = ({ darkMode, setDarkMode }) => {
+const Navbar = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const pages = getPages(user?.isAdmin);
-  
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
+  const [notificationCount, setNotificationCount] = useState(0);
   
   const [anchorElNav, setAnchorElNav] = useState(null);
   const [anchorElUser, setAnchorElUser] = useState(null);
@@ -116,7 +115,7 @@ const Navbar = ({ darkMode, setDarkMode }) => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      navigate(`/anime?search=${encodeURIComponent(searchTerm.trim())}`);
+      navigate(`/anime-list?search=${encodeURIComponent(searchTerm.trim())}`);
       setSearchTerm('');
     }
   };
@@ -124,6 +123,24 @@ const Navbar = ({ darkMode, setDarkMode }) => {
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
+
+  useEffect(() => {
+    const checkNotifications = async () => {
+      if (!user) return;
+      try {
+        const pending = await reminderService.getPendingNotifications();
+        setNotificationCount(pending.length);
+      } catch (error) {
+        console.error('Error checking notifications:', error);
+      }
+    };
+
+    if (user) {
+      checkNotifications();
+      const interval = setInterval(checkNotifications, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   return (
     <AppBar position="static">
@@ -231,11 +248,20 @@ const Navbar = ({ darkMode, setDarkMode }) => {
           </Search>
 
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Tooltip title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-              <IconButton onClick={toggleDarkMode} color="inherit">
-                {darkMode ? <LightModeIcon /> : <DarkModeIcon />}
-              </IconButton>
-            </Tooltip>
+            {user && (
+              <Tooltip title="Reminders">
+                <IconButton 
+                  color="inherit" 
+                  component={RouterLink} 
+                  to="/reminders"
+                >
+                  <Badge badgeContent={notificationCount} color="error">
+                    <NotificationsIcon />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            )}
+            <ThemeToggle />
           </Box>
 
           {user ? (

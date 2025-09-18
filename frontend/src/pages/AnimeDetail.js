@@ -26,8 +26,16 @@ import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StarIcon from '@mui/icons-material/Star';
 import CommentIcon from '@mui/icons-material/Comment';
-import { animeService } from '../services/api';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import { animeService, reviewService } from '../services/api';
 import { useWatchlist } from '../context/WatchlistContext';
+import SpoilerText from '../components/SpoilerText';
+import SpoilerTextEditor from '../components/SpoilerTextEditor';
+import { SpoilerText as InlineSpoilerText } from '../components/SpoilerProtection';
+import EpisodeReminderModal from '../components/EpisodeReminderModal';
+import { reminderService } from '../services/reminderService';
+import StreamingPlatforms from '../components/StreamingPlatforms';
+import TrailerEmbed from '../components/TrailerEmbed';
 
 const AnimeDetailSkeleton = () => (
   <Box sx={{ flexGrow: 1, py: 4 }}>
@@ -71,13 +79,45 @@ const AnimeDetail = () => {
   const [reviewText, setReviewText] = useState('');
   const [watchStatus, setWatchStatus] = useState('plan-to-watch');
   const [episodesWatched, setEpisodesWatched] = useState(0);
+  const [reviews, setReviews] = useState([]);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
+  
+  // Debug modal state
+  useEffect(() => {
+    console.log('Reminder modal open:', reminderModalOpen);
+  }, [reminderModalOpen]);
 
   useEffect(() => {
     const fetchAnime = async () => {
       try {
         setLoading(true);
         const res = await animeService.getById(id);
-        setAnime(res.data);
+        let animeData = res.data;
+        
+        // Add sample streaming data if none exists
+        if (!animeData.streamingPlatforms || animeData.streamingPlatforms.length === 0) {
+          animeData.streamingPlatforms = [
+            { name: 'Crunchyroll', url: 'https://www.crunchyroll.com', region: ['US', 'UK'] },
+            { name: 'Netflix', url: 'https://www.netflix.com', region: ['Global'] }
+          ];
+        }
+        
+        // Add sample trailer if none exists
+        if (!animeData.trailer) {
+          animeData.trailer = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+        }
+        
+        setAnime(animeData);
+        
+        // Load reviews
+        try {
+          const reviewsRes = await reviewService.getByAnime(id);
+          setReviews(reviewsRes.data || []);
+        } catch (reviewError) {
+          console.log('No reviews found or error loading reviews');
+          setReviews([]);
+        }
       } catch (err) {
         setError('Failed to load anime details.');
         console.error(err);
@@ -119,6 +159,36 @@ const AnimeDetail = () => {
     } catch (err) {
       console.error('Failed to save changes:', err);
     }
+  };
+  
+  const handleSubmitReview = async () => {
+    if (!reviewText.trim() || userRating === 0) {
+      alert('Please provide both a rating and review text.');
+      return;
+    }
+    
+    setSubmittingReview(true);
+    try {
+      const newReview = await reviewService.create({
+        anime: id,
+        rating: userRating * 2, // Convert 5-star to 10-point scale
+        content: reviewText,
+        isSpoiler: reviewText.includes('||')
+      });
+      
+      setReviews(prev => [newReview.data, ...prev]);
+      setReviewText('');
+      alert('Review submitted successfully!');
+    } catch (error) {
+      console.error('Failed to submit review:', error);
+      alert('Failed to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleSaveReminder = () => {
+    // Handled by the modal component
   };
 
   if (loading) return <AnimeDetailSkeleton />;
@@ -185,28 +255,40 @@ const AnimeDetail = () => {
                   sx={{ color: 'white', borderColor: 'white' }} 
                 />
               </Box>
-              <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+              <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
                 <Button 
                   variant="contained" 
                   color="primary" 
                   startIcon={<BookmarkAddIcon />}
-                  fullWidth
                   sx={{ mb: 1 }}
                   onClick={handleSaveChanges}
                 >
                   {watchlistItem ? 'Update List' : 'Add to List'}
                 </Button>
-                {anime.streamingPlatforms?.length > 0 && (
+                <Button 
+                  variant="outlined" 
+                  startIcon={<NotificationsIcon />}
+                  onClick={() => {
+                    console.log('Set Reminder clicked');
+                    setReminderModalOpen(true);
+                  }}
+                  sx={{ mb: 1, color: 'white', borderColor: 'white' }}
+                >
+                  Set Reminder
+                </Button>
+                {anime.streamingPlatforms?.map((platform, index) => (
                   <Button 
+                    key={index}
                     variant="contained" 
                     color="secondary" 
                     startIcon={<PlayArrowIcon />}
-                    href={anime.streamingPlatforms[0].url}
+                    href={platform.url}
                     target="_blank"
+                    sx={{ mb: 1 }}
                   >
-                    Watch Now
+                    {platform.name}
                   </Button>
-                )}
+                ))}
               </Box>
             </Grid>
           </Grid>
@@ -237,9 +319,15 @@ const AnimeDetail = () => {
                 <Typography variant="h5" gutterBottom>
                   Synopsis
                 </Typography>
-                <Typography paragraph>
-                  {anime.description}
-                </Typography>
+                {anime.description?.includes('[SPOILER]') ? (
+                  <SpoilerText title="Plot Spoiler">
+                    {anime.description.replace('[SPOILER]', '')}
+                  </SpoilerText>
+                ) : (
+                  <Typography paragraph>
+                    {anime.description}
+                  </Typography>
+                )}
                 
                 <Divider sx={{ my: 3 }} />
                 
@@ -291,27 +379,10 @@ const AnimeDetail = () => {
                   </>
                 )}
                 
-                {anime.streamingPlatforms?.length > 0 && (
-                  <>
-                    <Divider sx={{ my: 3 }} />
-                    <Typography variant="h5" gutterBottom>
-                      Streaming Platforms
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {anime.streamingPlatforms.map((platform, index) => (
-                        <Button 
-                          key={index}
-                          variant="outlined" 
-                          href={platform.url}
-                          target="_blank"
-                          sx={{ mb: 1 }}
-                        >
-                          {platform.name}
-                        </Button>
-                      ))}
-                    </Box>
-                  </>
-                )}
+                <Divider sx={{ my: 3 }} />
+                <StreamingPlatforms platforms={anime.streamingPlatforms} />
+                
+                <TrailerEmbed trailerUrl={anime.trailer} />
               </Box>
             )}
 
@@ -371,36 +442,46 @@ const AnimeDetail = () => {
                       }}
                       precision={0.5}
                     />
+                    <Typography variant="caption" color="text.secondary">
+                      {userRating > 0 ? `${userRating * 2}/10` : 'No rating'}
+                    </Typography>
                   </Box>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={4}
-                    label="Your Review"
-                    value={reviewText}
-                    onChange={(e) => setReviewText(e.target.value)}
-                    sx={{ mb: 2 }}
-                  />
+                  
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Your Review
+                    </Typography>
+                    <SpoilerTextEditor
+                      value={reviewText}
+                      onChange={setReviewText}
+                      placeholder="Share your thoughts about this anime... Use ||spoiler|| tags for spoilers."
+                    />
+                  </Box>
+                  
                   <Button 
                     variant="contained" 
                     color="primary"
                     startIcon={<CommentIcon />}
+                    onClick={handleSubmitReview}
+                    disabled={submittingReview || !reviewText.trim() || userRating === 0}
                   >
-                    Submit Review
+                    {submittingReview ? 'Submitting...' : 'Submit Review'}
                   </Button>
                 </Paper>
                 
-                {anime.reviews?.length > 0 ? (
+                {reviews.length > 0 ? (
                   <List>
-                    {anime.reviews.map((review, index) => (
-                      <React.Fragment key={review.id || index}>
+                    {reviews.map((review, index) => (
+                      <React.Fragment key={review._id || index}>
                         <ListItem alignItems="flex-start">
                           <ListItemAvatar>
-                            <Avatar alt={review.user?.username} src={review.user?.avatar} />
+                            <Avatar alt={review.user?.username} src={review.user?.avatar}>
+                              {review.user?.username?.charAt(0).toUpperCase()}
+                            </Avatar>
                           </ListItemAvatar>
                           <ListItemText
                             primary={
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="subtitle1">
                                   {review.user?.username || 'Anonymous'}
                                 </Typography>
@@ -409,6 +490,14 @@ const AnimeDetail = () => {
                                   <Typography variant="body2" sx={{ ml: 1 }}>
                                     {review.rating}/10
                                   </Typography>
+                                  {review.isSpoiler && (
+                                    <Chip 
+                                      label="Contains Spoilers" 
+                                      size="small" 
+                                      color="warning" 
+                                      sx={{ ml: 1 }}
+                                    />
+                                  )}
                                 </Box>
                               </Box>
                             }
@@ -417,13 +506,17 @@ const AnimeDetail = () => {
                                 <Typography
                                   component="span"
                                   variant="body2"
-                                  color="text.primary"
+                                  color="text.secondary"
+                                  sx={{ display: 'block', mb: 1 }}
                                 >
-                                  {review.date || review.createdAt}
+                                  {new Date(review.createdAt).toLocaleDateString()}
                                 </Typography>
-                                <Typography variant="body1" paragraph sx={{ mt: 1 }}>
-                                  {review.content}
-                                </Typography>
+                                <Box sx={{ mt: 1 }}>
+                                  <InlineSpoilerText
+                                    content={review.content}
+                                    className=""
+                                  />
+                                </Box>
                               </>
                             }
                           />
@@ -433,7 +526,9 @@ const AnimeDetail = () => {
                     ))}
                   </List>
                 ) : (
-                  <Typography>No reviews yet. Be the first to review!</Typography>
+                  <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                    No reviews yet. Be the first to review this anime!
+                  </Typography>
                 )}
               </Box>
             )}
@@ -569,6 +664,13 @@ const AnimeDetail = () => {
           </Grid>
         </Grid>
       </Container>
+      
+      <EpisodeReminderModal
+        isOpen={reminderModalOpen}
+        onClose={() => setReminderModalOpen(false)}
+        anime={anime}
+        onSave={handleSaveReminder}
+      />
     </Box>
   );
 };

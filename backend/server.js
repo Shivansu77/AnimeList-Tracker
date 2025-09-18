@@ -13,6 +13,10 @@ const reviewsRoutes = require('./routes/reviews');
 const adminRoutes = require('./routes/admin');
 const uploadRoutes = require('./routes/upload');
 const chatbotRoutes = require('./routes/chatbot');
+const reminderRoutes = require('./routes/reminders');
+const episodeRoutes = require('./routes/episodes');
+const streamingRoutes = require('./routes/streaming');
+const watchlistShareRoutes = require('./routes/watchlistShare');
 
 const app = express();
 
@@ -38,9 +42,19 @@ app.use('/api/anime', animeRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/clubs', clubsRoutes);
 app.use('/api/reviews', reviewsRoutes);
+app.use('/api/comments', require('./routes/comments'));
+app.use('/api/spoiler-reports', require('./routes/spoilerReports'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/posts', require('./routes/posts'));
+app.use('/api/reminders', reminderRoutes);
+app.use('/api/episodes', episodeRoutes);
+app.use('/api/streaming', streamingRoutes);
+app.use('/api/watchlist-share', watchlistShareRoutes);
+
+// Start reminder scheduler
+require('./services/reminderScheduler');
 
 // Serve static assets in production
 if (process.env.NODE_ENV === 'production') {

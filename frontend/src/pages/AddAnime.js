@@ -34,7 +34,9 @@ const AddAnime = () => {
     releaseDate: '',
     studio: '',
     source: '',
-    rating: ''
+    rating: '',
+    trailer: '',
+    streamingPlatforms: [{ name: '', url: '', region: [] }]
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -58,6 +60,28 @@ const AddAnime = () => {
       ...formData,
       genres: event.target.value
     });
+  };
+
+  const addStreamingPlatform = () => {
+    setFormData({
+      ...formData,
+      streamingPlatforms: [...formData.streamingPlatforms, { name: '', url: '', region: [] }]
+    });
+  };
+
+  const updateStreamingPlatform = (index, field, value) => {
+    const updated = [...formData.streamingPlatforms];
+    if (field === 'region') {
+      updated[index][field] = value.split(',').map(r => r.trim()).filter(r => r);
+    } else {
+      updated[index][field] = value;
+    }
+    setFormData({ ...formData, streamingPlatforms: updated });
+  };
+
+  const removeStreamingPlatform = (index) => {
+    const updated = formData.streamingPlatforms.filter((_, i) => i !== index);
+    setFormData({ ...formData, streamingPlatforms: updated });
   };
 
   const handleImageUpload = async (event, field) => {
@@ -100,7 +124,7 @@ const AddAnime = () => {
       const submitData = {
         ...formData,
         episodes: parseInt(formData.episodes) || 1,
-        rating: parseFloat(formData.rating) || undefined,
+        rating: formData.rating ? Math.max(0, Math.min(10, parseFloat(formData.rating))) : 0,
         poster: formData.poster || 'https://via.placeholder.com/300x400'
       };
       
@@ -317,8 +341,86 @@ const AddAnime = () => {
                 name="rating"
                 value={formData.rating}
                 onChange={handleChange}
-                inputProps={{ min: 1, max: 10, step: 0.1 }}
+                inputProps={{ min: 0, max: 10, step: 0.1 }}
+                helperText="Enter rating from 0-10 (0 = no rating)"
               />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="YouTube Trailer URL"
+                name="trailer"
+                value={formData.trailer}
+                onChange={handleChange}
+                placeholder="https://www.youtube.com/watch?v=..."
+                helperText="Paste YouTube video URL for the trailer"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom>
+                Streaming Platforms
+              </Typography>
+              {formData.streamingPlatforms.map((platform, index) => (
+                <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <FormControl fullWidth>
+                        <InputLabel>Platform</InputLabel>
+                        <Select
+                          value={platform.name}
+                          onChange={(e) => updateStreamingPlatform(index, 'name', e.target.value)}
+                        >
+                          <MenuItem value="Crunchyroll">Crunchyroll</MenuItem>
+                          <MenuItem value="Netflix">Netflix</MenuItem>
+                          <MenuItem value="Disney+">Disney+</MenuItem>
+                          <MenuItem value="Funimation">Funimation</MenuItem>
+                          <MenuItem value="Hulu">Hulu</MenuItem>
+                          <MenuItem value="Amazon Prime">Amazon Prime</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label="URL"
+                        value={platform.url}
+                        onChange={(e) => updateStreamingPlatform(index, 'url', e.target.value)}
+                        placeholder="https://..."
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={3}>
+                      <TextField
+                        fullWidth
+                        label="Regions"
+                        value={platform.region.join(', ')}
+                        onChange={(e) => updateStreamingPlatform(index, 'region', e.target.value)}
+                        placeholder="US, UK, CA"
+                        helperText="Comma separated"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={1}>
+                      {formData.streamingPlatforms.length > 1 && (
+                        <Button
+                          color="error"
+                          onClick={() => removeStreamingPlatform(index)}
+                          sx={{ mt: 1 }}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </Grid>
+                  </Grid>
+                </Paper>
+              ))}
+              <Button
+                variant="outlined"
+                onClick={addStreamingPlatform}
+                sx={{ mb: 2 }}
+              >
+                Add Streaming Platform
+              </Button>
             </Grid>
 
             <Grid item xs={12}>

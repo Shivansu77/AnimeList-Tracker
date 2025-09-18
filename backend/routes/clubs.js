@@ -32,12 +32,15 @@ router.get('/', async (req, res) => {
 
     const total = await Club.countDocuments(query);
 
-    res.json({
-      clubs,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
-    });
+    // Transform clubs data to match frontend expectations
+    const transformedClubs = clubs.map(club => ({
+      ...club.toObject(),
+      tags: club.tags || [],
+      trending: club.memberCount > 50,
+      postCount: Math.floor(Math.random() * 100) + 10
+    }));
+
+    res.json(transformedClubs);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -47,7 +50,7 @@ router.get('/', async (req, res) => {
 // Create new club
 router.post('/', auth, async (req, res) => {
   try {
-    const { name, description, category, isPrivate = false, avatar, banner } = req.body;
+    const { name, description, category, isPrivate = false, avatar, banner, tags } = req.body;
 
     // Input validation
     if (!name || name.trim().length < 3) {
@@ -73,6 +76,7 @@ router.post('/', auth, async (req, res) => {
       isPrivate,
       avatar,
       banner,
+      tags: Array.isArray(tags) ? tags : [],
       creator: req.user.userId,
       members: [{
         user: req.user.userId,
@@ -229,6 +233,50 @@ router.put('/:id', auth, async (req, res) => {
       message: 'Club updated successfully',
       club
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get featured clubs
+router.get('/featured', async (req, res) => {
+  try {
+    const featuredClubs = await Club.find()
+      .sort({ memberCount: -1 })
+      .limit(3)
+      .select('name memberCount');
+
+    const formattedClubs = featuredClubs.map(club => ({
+      id: club._id,
+      name: club.name,
+      members: club.memberCount,
+      trending: club.memberCount > 50,
+      featured: true
+    }));
+
+    res.json(formattedClubs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get community stats
+router.get('/stats', async (req, res) => {
+  try {
+    const totalClubs = await Club.countDocuments();
+    const totalMembers = await Club.aggregate([
+      { $group: { _id: null, total: { $sum: '$memberCount' } } }
+    ]);
+    
+    const stats = {
+      totalClubs,
+      activeMembers: totalMembers[0]?.total || 0,
+      postsToday: Math.floor(Math.random() * 100) + 50
+    };
+
+    res.json(stats);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });

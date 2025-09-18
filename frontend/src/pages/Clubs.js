@@ -60,6 +60,7 @@ const ClubCardSkeleton = () => (
 const Clubs = () => {
   const { user } = useAuth();
   const [clubs, setClubs] = useState([]);
+  const [memberStatus, setMemberStatus] = useState({});
   
   // Ensure clubs is always an array
   const clubsArray = Array.isArray(clubs) ? clubs : [];
@@ -74,34 +75,63 @@ const Clubs = () => {
     tags: ''
   });
 
-  // Mock data for enhanced features
-  const [featuredClubs] = useState([
-    { id: 1, name: 'Shonen Enthusiasts', members: 1250, trending: true, featured: true },
-    { id: 2, name: 'Studio Ghibli Fans', members: 890, trending: true, featured: true },
-    { id: 3, name: 'Manga Readers', members: 2100, trending: false, featured: true }
-  ]);
-
-  const [recentActivity] = useState([
-    { user: 'AnimeKing', action: 'joined', club: 'Shonen Enthusiasts', time: '2 min ago' },
-    { user: 'MangaLover', action: 'posted in', club: 'Manga Readers', time: '5 min ago' },
-    { user: 'GhibliFan', action: 'created event in', club: 'Studio Ghibli Fans', time: '10 min ago' }
-  ]);
+  // Dynamic data
+  const [featuredClubs, setFeaturedClubs] = useState([]);
+  const [communityStats, setCommunityStats] = useState({
+    totalClubs: 0,
+    activeMembers: 0,
+    postsToday: 0
+  });
 
   useEffect(() => {
     const fetchClubs = async () => {
       try {
         setLoading(true);
+        setError(null);
         const params = { q: searchTerm };
         const res = await clubService.getAll(params);
-        setClubs(res.data || []);
+        const clubData = Array.isArray(res.data) ? res.data : [];
+        setClubs(clubData);
+        
+        // Load member status from localStorage
+        const status = {};
+        clubData.forEach(club => {
+          const isMember = localStorage.getItem(`club_member_${club._id}`) === 'true';
+          status[club._id] = isMember;
+        });
+        setMemberStatus(status);
       } catch (err) {
-        setError('Failed to load clubs.');
-        console.error(err);
+        console.error('Club fetch error:', err);
+        setClubs([]);
+        if (err.response?.status !== 404) {
+          setError('Failed to load clubs. Please try again later.');
+        }
       } finally {
         setLoading(false);
       }
     };
+
+    const fetchFeaturedClubs = async () => {
+      try {
+        const res = await clubService.getFeatured();
+        setFeaturedClubs(res.data);
+      } catch (err) {
+        console.error('Featured clubs fetch error:', err);
+      }
+    };
+
+    const fetchStats = async () => {
+      try {
+        const res = await clubService.getStats();
+        setCommunityStats(res.data);
+      } catch (err) {
+        console.error('Stats fetch error:', err);
+      }
+    };
+
     fetchClubs();
+    fetchFeaturedClubs();
+    fetchStats();
   }, [searchTerm]);
 
   const handleSearchChange = (event) => {
@@ -125,6 +155,7 @@ const Clubs = () => {
     try {
       const clubData = {
         ...newClub,
+        category: 'General',
         tags: newClub.tags.split(',').map(tag => tag.trim()),
       };
       const res = await clubService.create(clubData);
@@ -133,11 +164,42 @@ const Clubs = () => {
       setNewClub({ name: '', description: '', tags: '' });
     } catch (err) {
       console.error('Failed to create club', err);
+      alert('Failed to create club: ' + (err.response?.data?.message || err.message));
     }
   };
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+  };
+
+  const handleJoinClub = async (clubId) => {
+    if (!user) {
+      alert('Please login to join clubs');
+      return;
+    }
+    
+    const isCurrentlyMember = memberStatus[clubId];
+    
+    // Update UI immediately
+    if (isCurrentlyMember) {
+      setMemberStatus(prev => ({ ...prev, [clubId]: false }));
+      setClubs(prev => prev.map(club => 
+        club._id === clubId 
+          ? { ...club, memberCount: Math.max((club.memberCount || 1) - 1, 0) }
+          : club
+      ));
+      localStorage.setItem(`club_member_${clubId}`, 'false');
+      alert('Left the club!');
+    } else {
+      setMemberStatus(prev => ({ ...prev, [clubId]: true }));
+      setClubs(prev => prev.map(club => 
+        club._id === clubId 
+          ? { ...club, memberCount: (club.memberCount || 0) + 1 }
+          : club
+      ));
+      localStorage.setItem(`club_member_${clubId}`, 'true');
+      alert('Joined the club!');
+    }
   };
 
   return (
@@ -202,6 +264,20 @@ const Clubs = () => {
           <Grid container spacing={3}>
             {loading ? (
               Array.from(new Array(6)).map((_, index) => <ClubCardSkeleton key={index} />)
+            ) : clubsArray.length === 0 ? (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 4, textAlign: 'center' }}>
+                  <Typography variant="h6" color="text.secondary" gutterBottom>
+                    No clubs found
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {searchTerm ? 'Try adjusting your search terms' : 'Be the first to create a club!'}
+                  </Typography>
+                  <Button variant="contained" onClick={handleCreateDialogOpen}>
+                    Create Club
+                  </Button>
+                </Paper>
+              </Grid>
             ) : (
               clubsArray.map((club) => (
                 <Grid item xs={12} sm={6} key={club._id}>
@@ -260,12 +336,15 @@ const Clubs = () => {
                           </Box>
                         </Box>
                         <Button 
-                          variant="contained" 
+                          variant={memberStatus[club._id] ? "outlined" : "contained"}
+                          color={memberStatus[club._id] ? "error" : "primary"}
                           size="small" 
-                          component={RouterLink} 
-                          to={`/clubs/${club._id}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleJoinClub(club._id);
+                          }}
                         >
-                          Join
+                          {memberStatus[club._id] ? 'Leave' : 'Join'}
                         </Button>
                       </Box>
                     </CardContent>
@@ -285,7 +364,7 @@ const Clubs = () => {
               Featured Clubs
             </Typography>
             <List>
-              {featuredClubs.map((club, index) => (
+              {featuredClubs.length > 0 ? featuredClubs.map((club, index) => (
                 <ListItem key={club.id} sx={{ px: 0 }}>
                   <ListItemAvatar>
                     <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -300,29 +379,14 @@ const Clubs = () => {
                     <Badge badgeContent="🔥" color="error" />
                   )}
                 </ListItem>
-              ))}
-            </List>
-          </Paper>
-
-          {/* Recent Activity */}
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-              <Forum sx={{ mr: 1, color: 'info.main' }} />
-              Recent Activity
-            </Typography>
-            <List>
-              {recentActivity.map((activity, index) => (
-                <ListItem key={index} sx={{ px: 0, py: 1 }}>
+              )) : (
+                <ListItem sx={{ px: 0 }}>
                   <ListItemText
-                    primary={
-                      <Typography variant="body2">
-                        <strong>{activity.user}</strong> {activity.action} <strong>{activity.club}</strong>
-                      </Typography>
-                    }
-                    secondary={activity.time}
+                    primary="No featured clubs yet"
+                    secondary="Create a club to get started!"
                   />
                 </ListItem>
-              ))}
+              )}
             </List>
           </Paper>
 
@@ -334,15 +398,15 @@ const Clubs = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2">Total Clubs:</Typography>
-                <Typography variant="body2" fontWeight="bold">{clubsArray.length}</Typography>
+                <Typography variant="body2" fontWeight="bold">{communityStats.totalClubs}</Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2">Active Members:</Typography>
-                <Typography variant="body2" fontWeight="bold">12,450</Typography>
+                <Typography variant="body2" fontWeight="bold">{communityStats.activeMembers}</Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2">Posts Today:</Typography>
-                <Typography variant="body2" fontWeight="bold">89</Typography>
+                <Typography variant="body2" fontWeight="bold">{communityStats.postsToday}</Typography>
               </Box>
             </Box>
           </Paper>

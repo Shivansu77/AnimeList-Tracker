@@ -22,7 +22,9 @@ router.post('/', [auth, admin], async (req, res) => {
       releaseDate,
       studio,
       source,
-      rating
+      rating,
+      trailer,
+      streamingPlatforms
     } = req.body;
 
     // Validation
@@ -52,7 +54,9 @@ router.post('/', [auth, admin], async (req, res) => {
       releaseDate: releaseDate ? new Date(releaseDate) : new Date(),
       studio,
       source,
-      rating
+      rating,
+      trailer,
+      streamingPlatforms: streamingPlatforms || []
     });
 
     await anime.save();
@@ -185,6 +189,57 @@ router.get('/:id', async (req, res) => {
     }
 
     res.json(anime);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update episode progress
+router.put('/:id/progress', auth, async (req, res) => {
+  try {
+    const { episodesWatched } = req.body;
+    
+    const user = await User.findById(req.user.userId);
+    const anime = await Anime.findById(req.params.id);
+    
+    if (!anime) {
+      return res.status(404).json({ message: 'Anime not found' });
+    }
+
+    const watchlistEntry = user.watchlist.find(
+      entry => entry.anime.toString() === req.params.id
+    );
+
+    if (!watchlistEntry) {
+      return res.status(404).json({ message: 'Anime not in watchlist' });
+    }
+
+    // Update progress
+    watchlistEntry.episodesWatched = Math.min(episodesWatched, anime.episodes);
+    
+    // Auto-update status based on progress
+    if (watchlistEntry.episodesWatched === 0) {
+      watchlistEntry.status = 'plan-to-watch';
+    } else if (watchlistEntry.episodesWatched >= anime.episodes) {
+      watchlistEntry.status = 'completed';
+      watchlistEntry.endDate = new Date();
+    } else {
+      watchlistEntry.status = 'watching';
+      if (!watchlistEntry.startDate) {
+        watchlistEntry.startDate = new Date();
+      }
+    }
+
+    await user.save();
+
+    res.json({ 
+      message: 'Progress updated successfully',
+      episodesWatched: watchlistEntry.episodesWatched,
+      totalEpisodes: anime.episodes,
+      status: watchlistEntry.status,
+      remaining: anime.episodes - watchlistEntry.episodesWatched
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
@@ -372,6 +427,8 @@ router.get('/recommendations/for-me', auth, async (req, res) => {
     // Analyze user preferences
     let totalCompleted = 0;
     user.watchlist.forEach(entry => {
+      if (!entry.anime) return; // Skip null anime entries
+      
       // Genre preference with weighted scoring
       const weight = entry.rating ? entry.rating / 10 : 0.5;
       entry.anime.genres?.forEach(genre => {
@@ -379,7 +436,9 @@ router.get('/recommendations/for-me', auth, async (req, res) => {
       });
       
       // Type preference
-      userProfile.preferredTypes[entry.anime.type] = (userProfile.preferredTypes[entry.anime.type] || 0) + 1;
+      if (entry.anime.type) {
+        userProfile.preferredTypes[entry.anime.type] = (userProfile.preferredTypes[entry.anime.type] || 0) + 1;
+      }
       
       // Rating pattern
       if (entry.rating) userProfile.ratingPattern.push(entry.rating);

@@ -60,9 +60,14 @@ const AnimeSchema = new mongoose.Schema({
     type: String,
     enum: ['Manga', 'Light Novel', 'Visual Novel', 'Game', 'Original', 'Other']
   },
-  rating: {
+  contentRating: {
     type: String,
     enum: ['G', 'PG', 'PG-13', 'R', 'R+', 'Rx']
+  },
+  rating: {
+    type: Number,
+    min: 0,
+    max: 10
   },
   poster: {
     type: String,

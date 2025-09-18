@@ -25,8 +25,10 @@ import {
 import {
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Share as ShareIcon
 } from '@mui/icons-material';
+import ShareWatchlistModal from '../components/ShareWatchlistModal';
 import { useWatchlist } from '../context/WatchlistContext';
 
 const WatchList = () => {
@@ -37,6 +39,7 @@ const WatchList = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editProgress, setEditProgress] = useState(0);
   const [editScore, setEditScore] = useState(0);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -87,6 +90,17 @@ const WatchList = () => {
     handleMenuClose();
   };
 
+  const handleQuickProgress = async (item, newProgress) => {
+    try {
+      await updateWatchlistItem(item.anime._id, {
+        ...item,
+        episodesWatched: Math.max(0, Math.min(newProgress, item.anime?.episodes || 0))
+      });
+    } catch (error) {
+      console.error("Failed to update progress", error);
+    }
+  };
+
   const categories = ['watching', 'completed', 'on-hold', 'dropped', 'plan-to-watch'];
   const currentCategory = categories[tabValue];
   const filteredList = watchlist.filter(item => item.status === currentCategory);
@@ -117,20 +131,20 @@ const WatchList = () => {
       );
     }
 
-    return filteredList.map((item) => (
-      <Grid item xs={12} sm={6} md={4} key={item.anime._id}>
+    return filteredList.filter(item => item.anime).map((item) => (
+      <Grid item xs={12} sm={6} md={4} key={item.anime?._id || item._id || Math.random()}>
         <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Box sx={{ display: 'flex', p: 2 }}>
             <CardMedia
               component="img"
               sx={{ width: 80, height: 120, objectFit: 'cover', borderRadius: 1 }}
-              image={item.anime.poster}
-              alt={item.anime.title}
+              image={item.anime?.poster || 'https://via.placeholder.com/80x120/f5f5f5/999?text=No+Image'}
+              alt={item.anime?.title || 'Anime'}
             />
             <CardContent sx={{ flexGrow: 1, pl: 2, pr: 0, pt: 0 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="h6" component="div" noWrap sx={{ maxWidth: 'calc(100% - 40px)' }}>
-                  {item.anime.title}
+                  {item.anime?.title || 'Unknown Anime'}
                 </Typography>
                 <IconButton size="small" onClick={(e) => handleMenuOpen(e, item)}>
                   <MoreVertIcon />
@@ -140,12 +154,12 @@ const WatchList = () => {
                 <>
                   <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                      {item.episodesWatched}/{item.anime.episodes} episodes
+                      {item.episodesWatched || 0}/{item.anime?.episodes || 0} episodes
                     </Typography>
                   </Box>
                   <LinearProgress 
                     variant="determinate" 
-                    value={(item.episodesWatched / item.anime.episodes) * 100} 
+                    value={item.anime?.episodes ? ((item.episodesWatched || 0) / item.anime.episodes) * 100 : 0} 
                     sx={{ mt: 1, mb: 1, height: 6, borderRadius: 3 }}
                   />
                 </>
@@ -153,6 +167,28 @@ const WatchList = () => {
               {item.rating > 0 && (
                 <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                   <Rating value={item.rating} precision={0.5} size="small" readOnly />
+                </Box>
+              )}
+              
+              {/* Quick Progress Buttons */}
+              {currentCategory === 'watching' && (
+                <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
+                  <Button 
+                    size="small" 
+                    variant="outlined"
+                    onClick={() => handleQuickProgress(item, item.episodesWatched + 1)}
+                    disabled={item.episodesWatched >= item.anime?.episodes}
+                  >
+                    +1 Episode
+                  </Button>
+                  <Button 
+                    size="small" 
+                    variant="outlined"
+                    onClick={() => handleQuickProgress(item, item.episodesWatched - 1)}
+                    disabled={item.episodesWatched <= 0}
+                  >
+                    -1
+                  </Button>
                 </Box>
               )}
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
@@ -167,9 +203,18 @@ const WatchList = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom sx={{ mb: 3 }}>
-        My Watchlist
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          My Watchlist
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<ShareIcon />}
+          onClick={() => setShareModalOpen(true)}
+        >
+          Share Watchlist
+        </Button>
+      </Box>
       
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs 
@@ -236,6 +281,11 @@ const WatchList = () => {
           </DialogActions>
         </Dialog>
       )}
+      
+      <ShareWatchlistModal
+        open={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+      />
     </Container>
   );
 };

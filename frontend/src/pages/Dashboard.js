@@ -18,6 +18,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { userService, animeService } from '../services/api';
 import { useWatchlist } from '../context/WatchlistContext';
+import ActivityFeed from '../components/ActivityFeed';
 
 const DashboardSkeleton = () => (
   <Container maxWidth="lg">
@@ -39,6 +40,9 @@ const Dashboard = () => {
   const { watchlist } = useWatchlist();
   const [stats, setStats] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
+  
+  // Ensure recommendations is always an array
+  const safeRecommendations = Array.isArray(recommendations) ? recommendations : [];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -46,21 +50,63 @@ const Dashboard = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [statsRes, recsRes] = await Promise.all([
-          userService.getWatchStats(),
-          animeService.getRecommendations(),
-        ]);
-        setStats(statsRes.data);
-        setRecommendations(recsRes.data);
+        setError(null);
+        
+        // Set fallback stats
+        const fallbackStats = {
+          totalAnime: 0,
+          watching: 0,
+          completed: 0,
+          onHold: 0,
+          dropped: 0,
+          planToWatch: 0,
+          totalEpisodesWatched: 0
+        };
+        
+        try {
+          const statsRes = await userService.getWatchStats();
+          setStats(statsRes.data || fallbackStats);
+        } catch (statsErr) {
+          console.warn('Stats failed, using fallback:', statsErr);
+          setStats(fallbackStats);
+        }
+        
+        try {
+          const recsRes = await animeService.getRecommendations();
+          const recsData = recsRes.data;
+          if (recsData && recsData.recommendations) {
+            setRecommendations(recsData.recommendations);
+          } else if (Array.isArray(recsData)) {
+            setRecommendations(recsData);
+          } else {
+            setRecommendations([]);
+          }
+        } catch (recsErr) {
+          console.warn('Recommendations failed:', recsErr);
+          setRecommendations([]);
+        }
+        
       } catch (err) {
-        setError('Failed to load dashboard data.');
-        console.error(err);
+        console.error('Dashboard error:', err);
+        setStats({
+          totalAnime: 0,
+          watching: 0,
+          completed: 0,
+          onHold: 0,
+          dropped: 0,
+          planToWatch: 0,
+          totalEpisodesWatched: 0
+        });
+        setRecommendations([]);
       } finally {
         setLoading(false);
       }
     };
+    
     if (user) {
       fetchData();
+    } else {
+      setLoading(false);
     }
   }, [user]);
 
@@ -137,20 +183,41 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
-        <Typography variant="h5" gutterBottom>For You</Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Grid container spacing={2}>
-          {(recommendations || []).map((anime) => (
-            <Grid item xs={12} sm={6} md={3} key={anime._id}>
-              <Card>
-                <CardMedia component="img" height="200" image={anime.poster} alt={anime.title} />
-                <CardContent><Typography variant="subtitle1" noWrap>{anime.title}</Typography></CardContent>
-              </Card>
-            </Grid>
-          ))}
+      <Grid container spacing={4} sx={{ mt: 2 }}>
+        <Grid item xs={12} md={8}>
+          <Typography variant="h5" gutterBottom>Activity Feed</Typography>
+          <ActivityFeed />
         </Grid>
-      </Paper>
+        <Grid item xs={12} md={4}>
+          <Paper elevation={3} sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom>For You</Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Grid container spacing={2}>
+              {safeRecommendations.length > 0 ? (
+                safeRecommendations.slice(0, 4).map((anime) => (
+                  <Grid item xs={12} key={anime._id}>
+                    <Card sx={{ display: 'flex' }}>
+                      <CardMedia component="img" sx={{ width: 60 }} image={anime.poster} alt={anime.title} />
+                      <CardContent sx={{ flex: 1 }}>
+                        <Typography variant="subtitle2" noWrap>{anime.title}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {anime.reason || 'Recommended for you'}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))
+              ) : (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary" align="center">
+                    No recommendations available.
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          </Paper>
+        </Grid>
+      </Grid>
     </Container>
   );
 };

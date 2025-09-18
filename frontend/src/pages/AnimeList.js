@@ -30,7 +30,9 @@ const AnimeCard = ({ anime, onDelete, showDelete }) => {
   return (
     <Card 
       sx={{ 
-        height: 400,
+        height: 420,
+        width: '100%',
+        flex: 1,
         display: 'flex',
         flexDirection: 'column',
         transition: 'transform 0.2s ease, box-shadow 0.2s ease',
@@ -43,12 +45,12 @@ const AnimeCard = ({ anime, onDelete, showDelete }) => {
       <Box sx={{ position: 'relative' }}>
         <CardMedia
           component="img"
-          height="240"
+          sx={{ height: 240, objectFit: 'cover' }}
           image={anime.poster || 'https://via.placeholder.com/200x240/f5f5f5/999?text=No+Image'}
           alt={anime.title}
         />
         
-        {anime.averageRating && (
+        {anime.averageRating > 0 && (
           <Chip
             icon={<Star sx={{ fontSize: 14 }} />}
             label={anime.averageRating.toFixed(1)}
@@ -85,7 +87,7 @@ const AnimeCard = ({ anime, onDelete, showDelete }) => {
         )}
       </Box>
 
-      <CardContent sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+      <CardContent sx={{ p: 2, height: 180, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <Typography 
           variant="subtitle1" 
           component={RouterLink}
@@ -100,13 +102,14 @@ const AnimeCard = ({ anime, onDelete, showDelete }) => {
             textDecoration: 'none',
             color: 'inherit',
             minHeight: 48,
+            maxHeight: 48,
             '&:hover': { color: 'primary.main' }
           }}
         >
           {anime.title}
         </Typography>
         
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1, minHeight: 32 }}>
           {anime.genres?.slice(0, 2).map(genre => (
             <Chip 
               key={genre} 
@@ -146,7 +149,13 @@ const AnimeSection = ({ title, animeList, loading, showViewAll = true, onDelete 
           {title}
         </Typography>
         {showViewAll && (
-          <Button variant="outlined" size="small">
+          <Button 
+            variant="outlined" 
+            size="small"
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          >
             View All
           </Button>
         )}
@@ -156,7 +165,7 @@ const AnimeSection = ({ title, animeList, loading, showViewAll = true, onDelete 
         {loading ? (
           Array.from(new Array(5)).map((_, index) => (
             <Grid item xs={6} sm={4} md={2.4} key={index}>
-              <Card sx={{ height: 400 }}>
+              <Card sx={{ height: 420, width: '100%', flex: 1 }}>
                 <Skeleton variant="rectangular" height={240} />
                 <CardContent>
                   <Skeleton variant="text" height={32} />
@@ -179,7 +188,7 @@ const AnimeSection = ({ title, animeList, loading, showViewAll = true, onDelete 
           </Grid>
         ) : (
           animeList.map((anime) => (
-            <Grid item xs={6} sm={4} md={2.4} key={anime._id}>
+            <Grid item xs={6} sm={4} md={2.4} key={anime._id} sx={{ display: 'flex' }}>
               <AnimeCard 
                 anime={anime}
                 onDelete={onDelete}
@@ -234,6 +243,15 @@ const AnimeList = () => {
       const params = { limit: 50 };
       if (searchTerm) {
         params.q = searchTerm;
+      }
+      if (selectedGenre) {
+        params.genre = selectedGenre;
+      }
+      if (selectedYear) {
+        params.year = selectedYear;
+      }
+      if (selectedFormat) {
+        params.type = selectedFormat;
       }
       const animeResponse = await animeService.getAll(params);
       
@@ -291,7 +309,7 @@ const AnimeList = () => {
 
   useEffect(() => {
     fetchAnimeData();
-  }, [searchTerm]);
+  }, [searchTerm, selectedGenre, selectedYear, selectedFormat]);
 
   useEffect(() => {
     const searchParam = searchParams.get('search');
@@ -350,6 +368,22 @@ const AnimeList = () => {
               </Select>
             </FormControl>
           </Grid>
+          <Grid item xs={12} md={1}>
+            <Button 
+              variant="outlined" 
+              fullWidth
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedGenre('');
+                setSelectedYear('');
+                setSelectedSeason('');
+                setSelectedFormat('');
+              }}
+              sx={{ height: '56px' }}
+            >
+              Clear
+            </Button>
+          </Grid>
         </Grid>
       </Paper>
 
@@ -390,6 +424,9 @@ const AnimeList = () => {
                 bgcolor: 'rgba(255,255,255,0.1)'
               }
             }}
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           >
             View All
           </Button>
@@ -398,8 +435,8 @@ const AnimeList = () => {
         <Grid container spacing={3}>
           {loading ? (
             Array.from(new Array(5)).map((_, index) => (
-              <Grid item xs={6} sm={4} md={2.4} key={index}>
-                <Card sx={{ height: 400 }}>
+              <Grid item xs={6} sm={4} md={2.4} key={index} sx={{ display: 'flex' }}>
+                <Card sx={{ height: 420, width: '100%', flex: 1 }}>
                   <Skeleton variant="rectangular" height={240} />
                   <CardContent>
                     <Skeleton variant="text" height={32} />
@@ -422,10 +459,12 @@ const AnimeList = () => {
             </Grid>
           ) : (
             animeData.trending.map((anime, index) => (
-              <Grid item xs={6} sm={4} md={2.4} key={anime._id}>
+              <Grid item xs={6} sm={4} md={2.4} key={anime._id} sx={{ display: 'flex' }}>
                 <Card 
                   sx={{ 
                     height: 420,
+                    width: '100%',
+                    flex: 1,
                     display: 'flex',
                     flexDirection: 'column',
                     position: 'relative',
@@ -461,7 +500,7 @@ const AnimeList = () => {
                   <Box sx={{ position: 'relative' }}>
                     <CardMedia
                       component="img"
-                      height="260"
+                      sx={{ height: 260, objectFit: 'cover' }}
                       image={anime.poster || 'https://via.placeholder.com/200x260/f5f5f5/999?text=No+Image'}
                       alt={anime.title}
                     />
@@ -504,7 +543,7 @@ const AnimeList = () => {
                     )}
                   </Box>
 
-                  <CardContent sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                  <CardContent sx={{ p: 2, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     <Typography 
                       variant="subtitle1" 
                       component={RouterLink}
@@ -519,13 +558,14 @@ const AnimeList = () => {
                         textDecoration: 'none',
                         color: 'inherit',
                         minHeight: 48,
+                        maxHeight: 48,
                         '&:hover': { color: '#ff6b6b' }
                       }}
                     >
                       {anime.title}
                     </Typography>
                     
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1, minHeight: 32 }}>
                       {anime.genres?.slice(0, 2).map(genre => (
                         <Chip 
                           key={genre} 

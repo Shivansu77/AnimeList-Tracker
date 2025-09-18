@@ -26,9 +26,18 @@ export const WatchlistProvider = ({ children }) => {
     try {
       setLoading(true);
       const res = await userService.getWatchlist();
-      setWatchlist(res.data);
+      const watchlistData = res.data || [];
+      setWatchlist(watchlistData);
+      // Backup to localStorage
+      localStorage.setItem(`animeTracker_watchlist_${user.username}`, JSON.stringify(watchlistData));
     } catch (err) {
-      setError('Failed to fetch watchlist.');
+      // Load from localStorage backup if API fails
+      const backup = localStorage.getItem(`animeTracker_watchlist_${user.username}`);
+      if (backup) {
+        setWatchlist(JSON.parse(backup));
+      } else {
+        setError('Failed to fetch watchlist.');
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -36,6 +45,13 @@ export const WatchlistProvider = ({ children }) => {
   }, [user]);
 
   useEffect(() => {
+    // Load from localStorage first for instant display
+    if (user) {
+      const backup = localStorage.getItem(`animeTracker_watchlist_${user.username}`);
+      if (backup) {
+        setWatchlist(JSON.parse(backup));
+      }
+    }
     fetchWatchlist();
   }, [fetchWatchlist]);
 
@@ -44,6 +60,14 @@ export const WatchlistProvider = ({ children }) => {
       await animeService.updateWatchlistItem(animeId, data);
       await fetchWatchlist(); // Refetch to get the latest state
     } catch (err) {
+      // Update localStorage backup even if API fails
+      const updatedWatchlist = watchlist.map(item => 
+        item.anime && item.anime._id === animeId ? { ...item, ...data } : item
+      );
+      setWatchlist(updatedWatchlist);
+      if (user) {
+        localStorage.setItem(`animeTracker_watchlist_${user.username}`, JSON.stringify(updatedWatchlist));
+      }
       setError('Failed to update watchlist item.');
       console.error('Failed to update watchlist item:', err);
       throw err;
@@ -53,7 +77,12 @@ export const WatchlistProvider = ({ children }) => {
   const removeFromWatchlist = async (animeId) => {
     try {
       await animeService.removeFromWatchlist(animeId);
-      setWatchlist(prev => prev.filter(item => item.anime._id !== animeId));
+      const updatedWatchlist = watchlist.filter(item => item.anime && item.anime._id !== animeId);
+      setWatchlist(updatedWatchlist);
+      // Update localStorage backup
+      if (user) {
+        localStorage.setItem(`animeTracker_watchlist_${user.username}`, JSON.stringify(updatedWatchlist));
+      }
     } catch (err) {
       setError('Failed to remove watchlist item.');
       console.error('Failed to remove watchlist item:', err);
@@ -62,7 +91,7 @@ export const WatchlistProvider = ({ children }) => {
   };
 
   const getWatchlistItem = (animeId) => {
-    return watchlist.find(item => item.anime._id === animeId);
+    return watchlist.find(item => item.anime && item.anime._id === animeId);
   };
 
   return (
