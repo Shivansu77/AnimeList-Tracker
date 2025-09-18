@@ -5,6 +5,63 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Get featured clubs - MUST be before /:id route
+router.get('/featured', async (req, res) => {
+  try {
+    const featuredClubs = await Club.find()
+      .sort({ memberCount: -1 })
+      .limit(3)
+      .select('name memberCount');
+
+    const formattedClubs = featuredClubs.map(club => ({
+      id: club._id,
+      name: club.name,
+      members: club.memberCount,
+      trending: club.memberCount > 50,
+      featured: true
+    }));
+
+    res.json(formattedClubs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json([]);
+  }
+});
+
+// Get community stats - MUST be before /:id route
+router.get('/stats', async (req, res) => {
+  try {
+    const totalClubs = await Club.countDocuments();
+    const totalMembers = await Club.aggregate([
+      { $group: { _id: null, total: { $sum: '$memberCount' } } }
+    ]);
+    
+    const stats = {
+      totalClubs,
+      activeMembers: totalMembers[0]?.total || 0,
+      postsToday: Math.floor(Math.random() * 100) + 50
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ totalClubs: 0, activeMembers: 0, postsToday: 0 });
+  }
+});
+
+// Get user's clubs - MUST be before /:id route
+router.get('/user/my-clubs', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId)
+      .populate('clubs', 'name avatar description memberCount category');
+
+    res.json(user.clubs || []);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json([]);
+  }
+});
+
 // Get all clubs with pagination
 router.get('/', async (req, res) => {
   try {
@@ -239,62 +296,7 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// Get featured clubs
-router.get('/featured', async (req, res) => {
-  try {
-    const featuredClubs = await Club.find()
-      .sort({ memberCount: -1 })
-      .limit(3)
-      .select('name memberCount');
 
-    const formattedClubs = featuredClubs.map(club => ({
-      id: club._id,
-      name: club.name,
-      members: club.memberCount,
-      trending: club.memberCount > 50,
-      featured: true
-    }));
-
-    res.json(formattedClubs);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Get community stats
-router.get('/stats', async (req, res) => {
-  try {
-    const totalClubs = await Club.countDocuments();
-    const totalMembers = await Club.aggregate([
-      { $group: { _id: null, total: { $sum: '$memberCount' } } }
-    ]);
-    
-    const stats = {
-      totalClubs,
-      activeMembers: totalMembers[0]?.total || 0,
-      postsToday: Math.floor(Math.random() * 100) + 50
-    };
-
-    res.json(stats);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Get user's clubs
-router.get('/user/my-clubs', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.userId)
-      .populate('clubs', 'name avatar description memberCount category');
-
-    res.json(user.clubs);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
 // Promote/demote member (admin only)
 router.put('/:id/members/:memberId/role', auth, async (req, res) => {

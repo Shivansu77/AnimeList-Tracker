@@ -26,6 +26,20 @@ import { animeService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const RecommendationCard = ({ anime }) => {
+  // Calculate match percentage from confidence or aiScore
+  const matchPercentage = anime.confidence 
+    ? Math.round(anime.confidence * 100) 
+    : anime.aiScore 
+      ? Math.round(anime.aiScore) 
+      : 75;
+
+  // Determine match color based on percentage
+  const getMatchColor = (percentage) => {
+    if (percentage >= 80) return 'success.main';
+    if (percentage >= 60) return 'primary.main';
+    return 'warning.main';
+  };
+
   return (
     <Card 
       sx={{ 
@@ -41,34 +55,37 @@ const RecommendationCard = ({ anime }) => {
       }}
     >
       {/* AI Badge */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          zIndex: 2,
-          bgcolor: 'primary.main',
-          color: 'white',
-          borderRadius: 2,
-          px: 1,
-          py: 0.5,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5
-        }}
-      >
-        <SmartToy sx={{ fontSize: 14 }} />
-        <Typography variant="caption" fontWeight="bold">
-          AI
-        </Typography>
-      </Box>
+      {anime.source === 'ai' && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            zIndex: 2,
+            bgcolor: 'primary.main',
+            color: 'white',
+            borderRadius: 2,
+            px: 1,
+            py: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5
+          }}
+        >
+          <SmartToy sx={{ fontSize: 14 }} />
+          <Typography variant="caption" fontWeight="bold">
+            AI
+          </Typography>
+        </Box>
+      )}
 
       <Box sx={{ position: 'relative' }}>
         <CardMedia
           component="img"
           height="260"
-          image={anime.poster || 'https://via.placeholder.com/200x260/7c4dff/ffffff?text=AI+Pick'}
+          image={anime.poster || 'https://via.placeholder.com/200x260/7c4dff/ffffff?text=No+Image'}
           alt={anime.title}
+          sx={{ objectFit: 'cover' }}
         />
         
         {anime.averageRating && (
@@ -82,7 +99,8 @@ const RecommendationCard = ({ anime }) => {
               right: 8,
               bgcolor: 'warning.main',
               color: 'white',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              zIndex: 2
             }}
           />
         )}
@@ -126,24 +144,31 @@ const RecommendationCard = ({ anime }) => {
         </Box>
 
         {/* AI Reason */}
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, fontStyle: 'italic' }}>
-          🤖 {anime.reason}
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, fontStyle: 'italic', minHeight: 40 }}>
+          {anime.reason ? `🤖 ${anime.reason}` : 'Recommended based on your preferences'}
         </Typography>
 
-        {/* AI Score Bar */}
+        {/* Match Score Bar */}
         <Box sx={{ mb: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            AI Match: {Math.round(anime.aiScore || 75)}%
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Match: {matchPercentage}%
+            </Typography>
+            {anime.source === 'ai' && (
+              <Typography variant="caption" color={getMatchColor(matchPercentage)}>
+                {matchPercentage >= 80 ? 'Excellent' : matchPercentage >= 60 ? 'Good' : 'Fair'} Match
+              </Typography>
+            )}
+          </Box>
           <LinearProgress 
             variant="determinate" 
-            value={anime.aiScore || 75} 
+            value={matchPercentage} 
             sx={{ 
               height: 4, 
               borderRadius: 2,
               bgcolor: 'grey.200',
               '& .MuiLinearProgress-bar': {
-                bgcolor: 'primary.main'
+                bgcolor: getMatchColor(matchPercentage)
               }
             }} 
           />
@@ -151,13 +176,17 @@ const RecommendationCard = ({ anime }) => {
 
         <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="body2" color="text.secondary">
-            {anime.type} • {anime.episodes} eps
+            {anime.type} • {anime.episodes || '?'} eps
           </Typography>
           <Button 
             variant="contained" 
             size="small"
             component={RouterLink}
             to={`/anime/${anime._id}`}
+            sx={{ 
+              bgcolor: getMatchColor(matchPercentage),
+              '&:hover': { bgcolor: getMatchColor(matchPercentage), opacity: 0.9 }
+            }}
           >
             View
           </Button>
@@ -173,6 +202,7 @@ const Recommendations = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [source, setSource] = useState('ai'); // 'ai' or 'algorithm' or 'popular'
 
   const fetchRecommendations = async () => {
     try {
@@ -181,13 +211,18 @@ const Recommendations = () => {
       const response = await animeService.getRecommendations();
       console.log('Recommendations response:', response.data);
       
-      // Handle different response formats
       if (response.data.recommendations) {
         setRecommendations(response.data.recommendations);
         setUserProfile(response.data.userProfile);
+        setSource(response.data.source || 'algorithm');
       } else if (Array.isArray(response.data)) {
         // Fallback for simple array response
-        setRecommendations(response.data);
+        setRecommendations(response.data.map(item => ({
+          ...item,
+          reason: 'Recommended based on your preferences',
+          source: 'algorithm'
+        })));
+        setSource('algorithm');
       } else {
         setRecommendations([]);
       }
@@ -203,8 +238,10 @@ const Recommendations = () => {
           setRecommendations(fallbackAnime.map(anime => ({
             ...anime,
             reason: 'Popular anime (fallback)',
-            aiScore: 70
+            confidence: 0.7,
+            source: 'popular'
           })));
+          setSource('popular');
           setError('Showing popular anime. Add anime to your watchlist for personalized recommendations.');
         } else {
           setError('No anime available. Please add some anime to the database.');
@@ -256,10 +293,14 @@ const Recommendations = () => {
           <Box>
             <Typography variant="h4" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Psychology color="primary" />
-              AI Recommendations
+              {source === 'ai' ? 'AI-Powered' : source === 'algorithm' ? 'Personalized' : 'Popular'} Recommendations
             </Typography>
             <Typography variant="subtitle1" color="text.secondary">
-              Personalized picks based on your viewing history and preferences
+              {source === 'ai' 
+                ? 'Smart recommendations powered by Gemini AI' 
+                : source === 'algorithm' 
+                  ? 'Recommendations based on your viewing patterns' 
+                  : 'Popular anime you might enjoy'}
             </Typography>
           </Box>
           <Button 
@@ -311,7 +352,7 @@ const Recommendations = () => {
         )}
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      {error && <Alert severity={source === 'popular' ? 'info' : 'error'} sx={{ mb: 3 }}>{error}</Alert>}
 
       {/* Recommendations Grid */}
       <Grid container spacing={3}>
@@ -357,17 +398,23 @@ const Recommendations = () => {
       </Grid>
 
       {/* AI Info */}
-      <Paper sx={{ p: 3, mt: 4, bgcolor: 'grey.50' }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <SmartToy color="primary" />
-          How Our AI Works
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Our recommendation engine analyzes your viewing history, ratings, genre preferences, and completion patterns 
-          to suggest anime you'll love. The AI considers factors like genre matching (40%), rating alignment (25%), 
-          type preferences (15%), popularity (10%), and diversity (10%) to create personalized recommendations.
-        </Typography>
-      </Paper>
+      {source === 'ai' && (
+        <Paper sx={{ p: 3, mt: 4, bgcolor: 'grey.50' }}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SmartToy color="primary" />
+            How Our AI Works
+          </Typography>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Our AI analyzes your watch history, ratings, and preferences to suggest anime you'll love. 
+            It considers factors like genre preferences, rating patterns, and completion rates to 
+            provide personalized recommendations just for you.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            <strong>Match Score:</strong> This shows how well each recommendation aligns with your 
+            preferences. Higher scores indicate better matches based on your viewing history.
+          </Typography>
+        </Paper>
+      )}
     </Container>
   );
 };

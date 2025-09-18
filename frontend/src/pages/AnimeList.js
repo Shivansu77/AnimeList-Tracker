@@ -204,11 +204,11 @@ const AnimeSection = ({ title, animeList, loading, showViewAll = true, onDelete 
 
 const AnimeList = () => {
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedGenre, setSelectedGenre] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
-  const [selectedSeason, setSelectedSeason] = useState('');
+
   const [selectedFormat, setSelectedFormat] = useState('');
   
   const [animeData, setAnimeData] = useState({
@@ -222,14 +222,14 @@ const AnimeList = () => {
   const [availableGenres, setAvailableGenres] = useState([]);
 
   const years = ['2024', '2023', '2022', '2021', '2020'];
-  const seasons = ['Winter', 'Spring', 'Summer', 'Fall'];
+
   const formats = ['TV', 'Movie', 'OVA', 'Special'];
 
   const handleDeleteAnime = async (animeId, animeTitle) => {
     if (window.confirm(`Are you sure you want to delete "${animeTitle}"?`)) {
       try {
         await animeService.delete(animeId);
-        fetchAnimeData();
+        window.location.reload();
       } catch (error) {
         console.error('Failed to delete anime:', error);
         alert('Failed to delete anime');
@@ -308,7 +308,55 @@ const AnimeList = () => {
   };
 
   useEffect(() => {
-    fetchAnimeData();
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const params = { limit: 50 };
+        if (searchTerm) params.q = searchTerm;
+        if (selectedGenre) params.genre = selectedGenre;
+        if (selectedYear) params.year = selectedYear;
+        if (selectedFormat) params.type = selectedFormat;
+        
+        const animeResponse = await animeService.getAll(params);
+        const allAnime = animeResponse.data?.anime || animeResponse.data || animeResponse || [];
+        
+        if (allAnime.length === 0) {
+          setAnimeData({ trending: [], popular: [], upcoming: [], allTime: [], top100: [] });
+          setAvailableGenres(['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy']);
+          return;
+        }
+        
+        const genres = [...new Set(allAnime.flatMap(anime => anime.genres || []))];
+        setAvailableGenres(genres.length > 0 ? genres : ['Action', 'Adventure', 'Comedy']);
+        
+        const shuffled = [...allAnime].sort(() => 0.5 - Math.random());
+        const sortedByRating = [...allAnime].sort((a, b) => {
+          const ratingA = a.averageRating || a.rating || 0;
+          const ratingB = b.averageRating || b.rating || 0;
+          return ratingB - ratingA;
+        });
+        
+        setAnimeData({
+          trending: shuffled.slice(0, 5),
+          popular: shuffled.slice(5, 10),
+          upcoming: shuffled.slice(10, 15),
+          allTime: shuffled.slice(15, 20),
+          top100: sortedByRating.slice(0, 10).map((anime, index) => ({
+            ...anime,
+            rank: index + 1,
+            displayRating: (anime.averageRating || anime.rating || 0).toFixed(1),
+            users: anime.totalRatings || 0
+          }))
+        });
+      } catch (error) {
+        console.error('Failed to fetch anime data:', error);
+        setAnimeData({ trending: [], popular: [], upcoming: [], allTime: [], top100: [] });
+        setAvailableGenres(['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy']);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, [searchTerm, selectedGenre, selectedYear, selectedFormat]);
 
   useEffect(() => {
@@ -350,15 +398,7 @@ const AnimeList = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={6} md={2}>
-            <FormControl fullWidth>
-              <InputLabel>Season</InputLabel>
-              <Select value={selectedSeason} onChange={(e) => setSelectedSeason(e.target.value)}>
-                <MenuItem value="">All</MenuItem>
-                {seasons.map(season => <MenuItem key={season} value={season}>{season}</MenuItem>)}
-              </Select>
-            </FormControl>
-          </Grid>
+
           <Grid item xs={6} md={2}>
             <FormControl fullWidth>
               <InputLabel>Format</InputLabel>
@@ -376,7 +416,7 @@ const AnimeList = () => {
                 setSearchTerm('');
                 setSelectedGenre('');
                 setSelectedYear('');
-                setSelectedSeason('');
+
                 setSelectedFormat('');
               }}
               sx={{ height: '56px' }}

@@ -3,7 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext';
 import { WatchlistProvider } from './context/WatchlistContext';
-import { CustomThemeProvider, useTheme } from './context/ThemeContext';
+import { CustomThemeProvider } from './context/ThemeContext';
 
 // Layout Components
 import Navbar from './components/layout/Navbar';

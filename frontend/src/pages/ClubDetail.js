@@ -133,85 +133,31 @@ const ClubDetail = () => {
   const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] });
   const [spoilerFlags, setSpoilerFlags] = useState({});
 
-  // Load discussions and replies from localStorage
+  // Load club data from API
   useEffect(() => {
-    const savedDiscussions = localStorage.getItem(`club_${id}_discussions`);
-    const savedReplies = localStorage.getItem(`club_${id}_replies`);
-    const savedChatMessages = localStorage.getItem(`club_${id}_chat`);
+    const fetchClubDiscussions = async () => {
+      try {
+        // For now, set empty discussions until discussions API is implemented
+        setDiscussions([]);
+        setDiscussionReplies({});
+        setChatMessages([]);
+        setRecentMembers([]);
+        setPolls([]);
+        
+        // Load spoiler setting from localStorage
+        const spoilerSetting = localStorage.getItem('showSpoilers');
+        setShowSpoilers(spoilerSetting === 'true');
+        
+        // Load spoiler flags
+        loadSpoilerFlags();
+      } catch (error) {
+        console.error('Failed to load club discussions:', error);
+      }
+    };
     
-    if (savedDiscussions) {
-      setDiscussions(JSON.parse(savedDiscussions));
-    } else {
-      // Default discussion
-      const defaultDiscussion = {
-        id: 1,
-        title: 'General Club Discussion',
-        author: 'ClubModerator',
-        content: 'Welcome to our club discussion! Share your thoughts about anime, recommendations, or anything related to our club.',
-        replies: 0,
-        lastActivity: 'Active now',
-        pinned: true
-      };
-      const spoilerDiscussion = {
-        id: 2,
-        title: 'Attack on Titan Final Season Discussion',
-        author: 'AnimeKing',
-        content: '[SPOILER]Eren becomes the final villain and destroys most of humanity!',
-        replies: 0,
-        lastActivity: '1h ago',
-        pinned: false
-      };
-      setDiscussions([defaultDiscussion, spoilerDiscussion]);
+    if (id) {
+      fetchClubDiscussions();
     }
-    
-    if (savedReplies) {
-      setDiscussionReplies(JSON.parse(savedReplies));
-    } else {
-      setDiscussionReplies({
-        1: [{ id: 1, author: 'ClubModerator', content: 'Feel free to share your favorite anime, ask for recommendations, or discuss anything anime-related!', time: '1h ago' }],
-        2: [{ id: 2, author: 'MangaFan', content: '[SPOILER]I can\'t believe Mikasa had to kill Eren in the end!', time: '30m ago' }]
-      });
-    }
-    
-    if (savedChatMessages) {
-      setChatMessages(JSON.parse(savedChatMessages));
-    }
-    
-    // Load recent members
-    const savedMembers = localStorage.getItem(`club_${id}_members`);
-    if (savedMembers) {
-      setRecentMembers(JSON.parse(savedMembers));
-    }
-    
-    // Load spoiler setting
-    const spoilerSetting = localStorage.getItem('showSpoilers');
-    setShowSpoilers(spoilerSetting === 'true');
-    
-    // Load polls
-    const savedPolls = localStorage.getItem(`club_${id}_polls`);
-    if (savedPolls) {
-      setPolls(JSON.parse(savedPolls));
-    } else {
-      // Default polls
-      const defaultPolls = [
-        {
-          id: 1,
-          question: 'Best anime of this season?',
-          options: [
-            { text: 'Attack on Titan', votes: 15 },
-            { text: 'Demon Slayer', votes: 12 },
-            { text: 'Jujutsu Kaisen', votes: 8 },
-            { text: 'One Piece', votes: 20 }
-          ],
-          totalVotes: 55,
-          userVote: null
-        }
-      ];
-      setPolls(defaultPolls);
-    }
-    
-    // Load spoiler flags
-    loadSpoilerFlags();
   }, [id]);
   
   const loadSpoilerFlags = async () => {
@@ -228,19 +174,31 @@ const ClubDetail = () => {
       try {
         const clubRes = await clubService.getById(id);
         setClub(clubRes.data);
-        // Discussions loaded from localStorage in separate useEffect
         
-        // Check localStorage for membership
-        const joinedClubs = JSON.parse(localStorage.getItem('joinedClubs') || '[]');
-        const isJoined = joinedClubs.includes(id);
-        setIsMember(isJoined);
+        // Check if current user is a member from the club data
+        if (user && clubRes.data.members) {
+          const isUserMember = clubRes.data.members.some(
+            member => member.user._id === user.id || member.user === user.id
+          );
+          setIsMember(isUserMember);
+        }
+        
+        // Set recent members from club data
+        if (clubRes.data.members) {
+          const recentMembers = clubRes.data.members
+            .slice(-5)
+            .reverse()
+            .map(member => ({
+              username: member.user.username || 'Anonymous',
+              joinedAt: member.joinedAt,
+              status: 'Member'
+            }));
+          setRecentMembers(recentMembers);
+        }
         
       } catch (error) {
         console.error('Failed to fetch club data:', error);
-        // Even if API fails, check localStorage
-        const joinedClubs = JSON.parse(localStorage.getItem('joinedClubs') || '[]');
-        const isJoined = joinedClubs.includes(id);
-        setIsMember(isJoined);
+        setClub(null);
       } finally {
         setLoading(false);
       }
@@ -252,68 +210,42 @@ const ClubDetail = () => {
   }, [id, user]);
 
   const handleJoinClub = async () => {
+    if (!user) {
+      alert('Please login to join clubs');
+      return;
+    }
+    
     try {
-      // Update localStorage
-      const joinedClubs = JSON.parse(localStorage.getItem('joinedClubs') || '[]');
-      if (!joinedClubs.includes(id)) {
-        joinedClubs.push(id);
-        localStorage.setItem('joinedClubs', JSON.stringify(joinedClubs));
-      }
-      
-      // Add to recent members
-      const member = {
-        username: user?.username || 'Anonymous',
-        joinedAt: new Date().toISOString(),
-        status: 'Active now'
-      };
-      
-      const existingMembers = JSON.parse(localStorage.getItem(`club_${id}_members`) || '[]');
-      const updatedMembers = [member, ...existingMembers.filter(m => m.username !== member.username)].slice(0, 5);
-      localStorage.setItem(`club_${id}_members`, JSON.stringify(updatedMembers));
-      setRecentMembers(updatedMembers);
-      
+      await clubService.join(id);
       setIsMember(true);
       setClub(prev => ({ ...prev, memberCount: (prev.memberCount || 0) + 1 }));
-      
-      // Try API call but don't fail if it doesn't work
-      try {
-        await clubService.join(id);
-      } catch (apiError) {
-        console.log('API call failed, but localStorage updated');
-      }
+      alert('Successfully joined the club!');
     } catch (error) {
       console.error('Failed to join club:', error);
+      alert('Failed to join club. Please try again.');
     }
   };
 
   const handleLeaveClub = async () => {
+    if (!user) {
+      alert('Please login first');
+      return;
+    }
+    
     try {
-      // Update localStorage
-      const joinedClubs = JSON.parse(localStorage.getItem('joinedClubs') || '[]');
-      const updatedClubs = joinedClubs.filter(clubId => clubId !== id);
-      localStorage.setItem('joinedClubs', JSON.stringify(updatedClubs));
-      
+      await clubService.leave(id);
       setIsMember(false);
       setClub(prev => ({ ...prev, memberCount: Math.max((prev.memberCount || 1) - 1, 0) }));
-      
-      // Try API call but don't fail if it doesn't work
-      try {
-        await clubService.leave(id);
-      } catch (apiError) {
-        console.log('API call failed, but localStorage updated');
-      }
+      alert('Successfully left the club!');
     } catch (error) {
       console.error('Failed to leave club:', error);
+      alert('Failed to leave club. Please try again.');
     }
   };
 
 
 
-  const [chatMessages, setChatMessages] = useState([
-    { id: 1, user: 'AnimeKing', message: 'Just finished watching the latest episode!', time: '2m ago', avatar: 'AK' },
-    { id: 2, user: 'MangaFan', message: 'The animation quality is insane 🔥', time: '1m ago', avatar: 'MF' },
-    { id: 3, user: 'OtakuLife', message: 'Did you see when ||the main character died||?!', time: 'Just now', avatar: 'OL' }
-  ]);
+  const [chatMessages, setChatMessages] = useState([]);
 
   const handlePostMessage = async () => {
     if (!newPost.trim()) return;
@@ -328,7 +260,6 @@ const ClubDetail = () => {
     
     const updatedMessages = [...chatMessages, newMessage];
     setChatMessages(updatedMessages);
-    localStorage.setItem(`club_${id}_chat`, JSON.stringify(updatedMessages));
     setNewPost('');
   };
 
@@ -352,7 +283,6 @@ const ClubDetail = () => {
 
     const updatedPolls = [poll, ...polls];
     setPolls(updatedPolls);
-    localStorage.setItem(`club_${id}_polls`, JSON.stringify(updatedPolls));
     
     setNewPoll({ question: '', options: ['', ''] });
     setShowNewPoll(false);
@@ -382,7 +312,6 @@ const ClubDetail = () => {
     });
     
     setPolls(updatedPolls);
-    localStorage.setItem(`club_${id}_polls`, JSON.stringify(updatedPolls));
   };
 
   const handleCreateDiscussion = async () => {
@@ -400,7 +329,6 @@ const ClubDetail = () => {
 
     const updatedDiscussions = [discussion, ...discussions];
     setDiscussions(updatedDiscussions);
-    localStorage.setItem(`club_${id}_discussions`, JSON.stringify(updatedDiscussions));
     
     setNewDiscussion({ title: '', content: '' });
     setShowNewDiscussion(false);
@@ -423,7 +351,6 @@ const ClubDetail = () => {
     };
     
     setDiscussionReplies(updatedReplies);
-    localStorage.setItem(`club_${id}_replies`, JSON.stringify(updatedReplies));
 
     setNewReply(prev => ({ ...prev, [discussionId]: '' }));
   };

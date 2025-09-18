@@ -145,7 +145,7 @@ const AnimeSection = ({ title, animeList, loading, onDelete }) => {
               </Card>
             </Grid>
           ))
-        ) : animeList.length === 0 ? (
+        ) : !Array.isArray(animeList) || animeList.length === 0 ? (
           <Grid item xs={12}>
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -157,7 +157,7 @@ const AnimeSection = ({ title, animeList, loading, onDelete }) => {
             </Paper>
           </Grid>
         ) : (
-          animeList.map((anime) => (
+          (Array.isArray(animeList) ? animeList : []).map((anime) => (
             <Grid item xs={6} sm={4} md={2.4} key={anime._id}>
               <AnimeCard 
                 anime={anime}
@@ -195,25 +195,18 @@ const Seasonal = () => {
   const fetchAnimeData = async () => {
     try {
       setLoading(true);
-      const animeResponse = await animeService.getAll({ limit: 30 });
+      const [popularResponse, upcomingResponse, favoritesResponse] = await Promise.all([
+        animeService.getAll({ limit: 5 }),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/anime/upcoming`).then(res => res.json()),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/anime/favorites`).then(res => res.json())
+      ]);
       
-      const allAnime = animeResponse.data?.anime || animeResponse.data || [];
-      
-      if (allAnime.length === 0) {
-        setAnimeData({
-          popular: [],
-          upcoming: [],
-          allTime: []
-        });
-        return;
-      }
-      
-      const shuffled = [...allAnime].sort(() => 0.5 - Math.random());
+      const popularAnime = popularResponse.data?.anime || popularResponse.data || [];
       
       setAnimeData({
-        popular: shuffled.slice(0, 5),
-        upcoming: shuffled.slice(5, 10),
-        allTime: shuffled.slice(10, 15)
+        popular: Array.isArray(popularAnime) ? popularAnime.slice(0, 5) : [],
+        upcoming: Array.isArray(upcomingResponse) ? upcomingResponse : [],
+        allTime: Array.isArray(favoritesResponse) ? favoritesResponse : []
       });
     } catch (error) {
       console.error('Failed to fetch anime data:', error);

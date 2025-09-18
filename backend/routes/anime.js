@@ -3,8 +3,39 @@ const Anime = require('../models/Anime');
 const User = require('../models/User');
 const Review = require('../models/Review');
 const { auth, admin } = require('../middleware/auth');
+const { generateRecommendations } = require('../services/geminiService');
 
 const router = express.Router();
+
+// Search anime - MUST be before /:id route
+router.get('/search', async (req, res) => {
+  try {
+    const { q, limit = 10 } = req.query;
+    
+    if (!q || q.trim() === '') {
+      return res.json({ results: [] });
+    }
+
+    const query = {
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { alternativeTitles: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { genres: { $in: [new RegExp(q, 'i')] } }
+      ]
+    };
+
+    const results = await Anime.find(query)
+      .sort({ averageRating: -1, totalRatings: -1 })
+      .limit(Math.min(parseInt(limit, 10), 20))
+      .select('title poster type episodes averageRating genres');
+
+    res.json({ results });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ results: [] });
+  }
+});
 
 // Create new anime (Admin only)
 router.post('/', [auth, admin], async (req, res) => {
@@ -323,6 +354,49 @@ router.delete('/:id/watchlist', auth, async (req, res) => {
   }
 });
 
+// Get upcoming anime
+router.get('/upcoming', async (req, res) => {
+  try {
+    const upcoming = await Anime.find({ status: 'Upcoming' })
+      .sort({ releaseDate: 1 })
+      .limit(5)
+      .select('title poster type episodes averageRating genres releaseDate');
+
+    if (upcoming.length === 0) {
+      return res.json([
+        { _id: '1', title: 'Solo Leveling Season 2', poster: 'https://via.placeholder.com/200x240', type: 'TV', episodes: 12, averageRating: 9.2, genres: ['Action', 'Fantasy'], releaseDate: new Date('2024-12-01') },
+        { _id: '2', title: 'Attack on Titan: Final Season Part 4', poster: 'https://via.placeholder.com/200x240', type: 'TV', episodes: 6, averageRating: 9.5, genres: ['Action', 'Drama'], releaseDate: new Date('2024-11-15') }
+      ]);
+    }
+
+    res.json(upcoming);
+  } catch (error) {
+    res.status(500).json([]);
+  }
+});
+
+// Get all-time favorites
+router.get('/favorites', async (req, res) => {
+  try {
+    const favorites = await Anime.find({ averageRating: { $gte: 8.5 } })
+      .sort({ averageRating: -1, totalRatings: -1 })
+      .limit(5)
+      .select('title poster type episodes averageRating genres releaseDate');
+
+    if (favorites.length === 0) {
+      return res.json([
+        { _id: '1', title: 'Fullmetal Alchemist: Brotherhood', poster: 'https://via.placeholder.com/200x240', type: 'TV', episodes: 64, averageRating: 9.8, genres: ['Action', 'Adventure'], releaseDate: new Date('2009-04-05') },
+        { _id: '2', title: 'Attack on Titan', poster: 'https://via.placeholder.com/200x240', type: 'TV', episodes: 25, averageRating: 9.6, genres: ['Action', 'Drama'], releaseDate: new Date('2013-04-07') },
+        { _id: '3', title: 'Death Note', poster: 'https://via.placeholder.com/200x240', type: 'TV', episodes: 37, averageRating: 9.4, genres: ['Thriller', 'Supernatural'], releaseDate: new Date('2006-10-04') }
+      ]);
+    }
+
+    res.json(favorites);
+  } catch (error) {
+    res.status(500).json([]);
+  }
+});
+
 // Get trending anime
 router.get('/trending/now', async (req, res) => {
   try {
@@ -413,10 +487,14 @@ router.get('/recommendations/for-me', auth, async (req, res) => {
         .sort({ averageRating: -1, totalRatings: -1 })
         .limit(10)
         .select('title poster genres averageRating totalRatings');
-      return res.json({ recommendations: popular, reason: 'Popular picks for new users' });
+      return res.json({ 
+        recommendations: popular, 
+        reason: 'Popular picks for new users',
+        source: 'popular'
+      });
     }
 
-    // AI Algorithm: Multi-factor recommendation system
+    // Analyze user preferences
     const userProfile = {
       favoriteGenres: {},
       preferredTypes: {},
@@ -464,73 +542,127 @@ router.get('/recommendations/for-me', auth, async (req, res) => {
     // Get anime IDs user has already seen
     const seenAnimeIds = user.watchlist.map(entry => entry.anime._id);
 
-    // AI Scoring Algorithm
-    const candidates = await Anime.find({
-      _id: { $nin: seenAnimeIds },
-      averageRating: { $gte: Math.max(6, avgUserRating - 1) }
-    }).select('title poster genres averageRating totalRatings type episodes');
+    try {
+      // Try to get AI-powered recommendations first
+      const aiRecommendations = await generateRecommendations(
+        { 
+          topGenres,
+          preferredTypes: topTypes,
+          avgRating: avgUserRating,
+          completionRate: userProfile.completionRate 
+        },
+        user.watchlist
+      );
 
-    const scoredRecommendations = candidates.map(anime => {
-      let score = 0;
-      
-      // Genre matching (40% weight)
-      const genreMatches = anime.genres?.filter(g => topGenres.includes(g)).length || 0;
-      score += (genreMatches / Math.max(topGenres.length, 1)) * 40;
-      
-      // Rating alignment (25% weight)
-      const ratingDiff = Math.abs(anime.averageRating - avgUserRating);
-      score += Math.max(0, (3 - ratingDiff) / 3) * 25;
-      
-      // Type preference (15% weight)
-      if (topTypes.includes(anime.type)) score += 15;
-      
-      // Popularity factor (10% weight)
-      const popularityScore = Math.min(anime.totalRatings / 1000, 1) * 10;
-      score += popularityScore;
-      
-      // Diversity bonus (10% weight) - prefer different genres occasionally
-      const hasNewGenre = anime.genres?.some(g => !topGenres.includes(g));
-      if (hasNewGenre && Math.random() > 0.7) score += 10;
-      
-      return { ...anime.toObject(), aiScore: score };
-    });
+      // Get full anime details for the AI recommendations
+      const aiAnimeTitles = aiRecommendations.map(r => r.title);
+      const aiAnime = await Anime.find({ 
+        title: { $in: aiAnimeTitles },
+        _id: { $nin: seenAnimeIds }
+      }).select('title poster genres averageRating totalRatings type');
 
-    // Sort by AI score and get top recommendations
-    const recommendations = scoredRecommendations
-      .sort((a, b) => b.aiScore - a.aiScore)
-      .slice(0, 12);
+      // Map AI reasons to the anime
+      const enhancedAiRecommendations = aiAnime.map(anime => {
+        const aiRec = aiRecommendations.find(r => r.title === anime.title);
+        return {
+          ...anime.toObject(),
+          reason: aiRec?.reason || 'Recommended based on your preferences',
+          confidence: aiRec?.confidence || 0.8,
+          source: 'ai'
+        };
+      });
 
-    // Add recommendation reasons
-    const reasonMap = {
-      high_genre_match: 'Based on your favorite genres',
-      rating_aligned: 'Matches your rating preferences', 
-      type_preference: 'Similar to anime you enjoy',
-      trending: 'Popular among similar users',
-      discovery: 'Something new you might like'
-    };
-
-    const enhancedRecommendations = recommendations.map(rec => {
-      let reason = 'Recommended for you';
-      if (rec.aiScore > 60) reason = reasonMap.high_genre_match;
-      else if (rec.aiScore > 45) reason = reasonMap.rating_aligned;
-      else if (rec.aiScore > 30) reason = reasonMap.type_preference;
-      else reason = reasonMap.discovery;
+      return res.json({ 
+        recommendations: enhancedAiRecommendations,
+        userProfile: {
+          topGenres: topGenres.slice(0, 3),
+          avgRating: Math.round(avgUserRating * 10) / 10,
+          completionRate: Math.round(userProfile.completionRate * 100)
+        },
+        source: 'ai'
+      });
+    } catch (aiError) {
+      console.error('AI recommendation failed, falling back to algorithm:', aiError);
       
-      return { ...rec, reason };
-    });
+      // Fallback to the existing algorithm if AI fails
+      const candidates = await Anime.find({
+        _id: { $nin: seenAnimeIds },
+        averageRating: { $gte: Math.max(6, avgUserRating - 1) }
+      }).select('title poster genres averageRating totalRatings type episodes');
 
-    res.json({ 
-      recommendations: enhancedRecommendations,
-      userProfile: {
-        topGenres: topGenres.slice(0, 3),
-        avgRating: Math.round(avgUserRating * 10) / 10,
-        completionRate: Math.round(userProfile.completionRate * 100)
-      }
-    });
+      const scoredRecommendations = candidates.map(anime => {
+        let score = 0;
+        
+        // Genre matching (40% weight)
+        const genreMatches = anime.genres?.filter(g => topGenres.includes(g)).length || 0;
+        score += (genreMatches / Math.max(topGenres.length, 1)) * 40;
+        
+        // Rating alignment (25% weight)
+        const ratingDiff = Math.abs(anime.averageRating - avgUserRating);
+        score += Math.max(0, (3 - ratingDiff) / 3) * 25;
+        
+        // Type preference (15% weight)
+        if (topTypes.includes(anime.type)) score += 15;
+        
+        // Popularity factor (10% weight)
+        const popularityScore = Math.min(anime.totalRatings / 1000, 1) * 10;
+        score += popularityScore;
+        
+        // Diversity bonus (10% weight)
+        const hasNewGenre = anime.genres?.some(g => !topGenres.includes(g));
+        if (hasNewGenre && Math.random() > 0.7) score += 10;
+        
+        return { ...anime.toObject(), aiScore: score };
+      });
+
+      // Sort by AI score and get top recommendations
+      const recommendations = scoredRecommendations
+        .sort((a, b) => b.aiScore - a.aiScore)
+        .slice(0, 12);
+
+      // Add recommendation reasons
+      const reasonMap = {
+        high_genre_match: 'Based on your favorite genres',
+        rating_aligned: 'Matches your rating preferences', 
+        type_preference: 'Similar to anime you enjoy',
+        trending: 'Popular among similar users',
+        discovery: 'Something new you might like'
+      };
+
+      const enhancedRecommendations = recommendations.map(rec => {
+        let reason = 'Recommended for you';
+        if (rec.aiScore > 60) reason = reasonMap.high_genre_match;
+        else if (rec.aiScore > 45) reason = reasonMap.rating_aligned;
+        else if (rec.aiScore > 30) reason = reasonMap.type_preference;
+        else reason = reasonMap.discovery;
+        
+        return { 
+          ...rec, 
+          reason,
+          source: 'algorithm',
+          confidence: rec.aiScore / 100 // Convert to 0-1 scale
+        };
+      });
+
+      res.json({ 
+        recommendations: enhancedRecommendations,
+        userProfile: {
+          topGenres: topGenres.slice(0, 3),
+          avgRating: Math.round(avgUserRating * 10) / 10,
+          completionRate: Math.round(userProfile.completionRate * 100)
+        },
+        source: 'algorithm'
+      });
+    }
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error in recommendations:', error);
+    res.status(500).json({ 
+      message: 'Failed to generate recommendations',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
+
+
 
 module.exports = router;

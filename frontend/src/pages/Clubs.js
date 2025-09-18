@@ -88,17 +88,21 @@ const Clubs = () => {
       try {
         setLoading(true);
         setError(null);
-        const params = { q: searchTerm };
+        const params = { search: searchTerm };
         const res = await clubService.getAll(params);
         const clubData = Array.isArray(res.data) ? res.data : [];
         setClubs(clubData);
         
-        // Load member status from localStorage
+        // Check membership status from API data
         const status = {};
-        clubData.forEach(club => {
-          const isMember = localStorage.getItem(`club_member_${club._id}`) === 'true';
-          status[club._id] = isMember;
-        });
+        if (user) {
+          clubData.forEach(club => {
+            const isMember = club.members?.some(
+              member => member.user === user.id || member.user._id === user.id
+            ) || false;
+            status[club._id] = isMember;
+          });
+        }
         setMemberStatus(status);
       } catch (err) {
         console.error('Club fetch error:', err);
@@ -180,25 +184,29 @@ const Clubs = () => {
     
     const isCurrentlyMember = memberStatus[clubId];
     
-    // Update UI immediately
-    if (isCurrentlyMember) {
-      setMemberStatus(prev => ({ ...prev, [clubId]: false }));
-      setClubs(prev => prev.map(club => 
-        club._id === clubId 
-          ? { ...club, memberCount: Math.max((club.memberCount || 1) - 1, 0) }
-          : club
-      ));
-      localStorage.setItem(`club_member_${clubId}`, 'false');
-      alert('Left the club!');
-    } else {
-      setMemberStatus(prev => ({ ...prev, [clubId]: true }));
-      setClubs(prev => prev.map(club => 
-        club._id === clubId 
-          ? { ...club, memberCount: (club.memberCount || 0) + 1 }
-          : club
-      ));
-      localStorage.setItem(`club_member_${clubId}`, 'true');
-      alert('Joined the club!');
+    try {
+      if (isCurrentlyMember) {
+        await clubService.leave(clubId);
+        setMemberStatus(prev => ({ ...prev, [clubId]: false }));
+        setClubs(prev => prev.map(club => 
+          club._id === clubId 
+            ? { ...club, memberCount: Math.max((club.memberCount || 1) - 1, 0) }
+            : club
+        ));
+        alert('Left the club!');
+      } else {
+        await clubService.join(clubId);
+        setMemberStatus(prev => ({ ...prev, [clubId]: true }));
+        setClubs(prev => prev.map(club => 
+          club._id === clubId 
+            ? { ...club, memberCount: (club.memberCount || 0) + 1 }
+            : club
+        ));
+        alert('Joined the club!');
+      }
+    } catch (error) {
+      console.error('Failed to join/leave club:', error);
+      alert('Failed to update membership. Please try again.');
     }
   };
 

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { reminderService } from '../../services/reminderService';
+import searchService from '../../services/searchService';
 import {
   AppBar,
   Box,
@@ -14,7 +15,16 @@ import {
   Button,
   Tooltip,
   MenuItem,
-  InputBase
+  InputBase,
+  Paper,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  ListItemAvatar,
+  Avatar as MuiAvatar,
+  Fade,
+  ClickAwayListener
 } from '@mui/material';
 import { styled, alpha } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -89,13 +99,17 @@ const settings = [
 const Navbar = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const searchRef = useRef(null);
   const pages = getPages(user?.isAdmin);
   const [notificationCount, setNotificationCount] = useState(0);
-  
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [anchorElNav, setAnchorElNav] = useState(null);
   const [anchorElUser, setAnchorElUser] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-
+  const searchTimeout = useRef(null);
+  
   const handleOpenNavMenu = (event) => {
     setAnchorElNav(event.currentTarget);
   };
@@ -112,17 +126,73 @@ const Navbar = () => {
     setAnchorElUser(null);
   };
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchTerm.trim()) {
-      navigate(`/anime-list?search=${encodeURIComponent(searchTerm.trim())}`);
-      setSearchTerm('');
+  const handleSearchChange = async (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    // Clear previous timeout
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    if (!value.trim()) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    // Set a new timeout
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        const results = await searchService.searchAnime(value);
+        setSearchResults(results);
+        setShowResults(true);
+      } catch (error) {
+        console.error('Search error:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300); // 300ms debounce
+  };
+
+  const handleSearchFocus = () => {
+    if (searchTerm.trim() && searchResults.length > 0) {
+      setShowResults(true);
     }
   };
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      navigate(`/anime?search=${encodeURIComponent(searchTerm.trim())}`);
+      setSearchTerm('');
+      setSearchResults([]);
+      setShowResults(false);
+    }
   };
+
+  const handleResultClick = (animeId) => {
+    navigate(`/anime/${animeId}`);
+    setSearchTerm('');
+    setSearchResults([]);
+    setShowResults(false);
+  };
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     const checkNotifications = async () => {
@@ -235,17 +305,77 @@ const Navbar = () => {
             ))}
           </Box>
 
-          <Search component="form" onSubmit={handleSearchSubmit}>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
-            <StyledInputBase
-              placeholder="Search anime..."
-              inputProps={{ 'aria-label': 'search' }}
-              value={searchTerm}
-              onChange={handleSearchChange}
-            />
-          </Search>
+          <Box sx={{ position: 'relative' }} ref={searchRef}>
+            <Search component="form" onSubmit={handleSearchSubmit}>
+              <SearchIconWrapper>
+                <SearchIcon />
+              </SearchIconWrapper>
+              <StyledInputBase
+                placeholder="Search anime..."
+                inputProps={{ 'aria-label': 'search' }}
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onFocus={handleSearchFocus}
+              />
+            </Search>
+
+            {/* Search Results Dropdown */}
+            <Fade in={showResults && searchResults.length > 0}>
+              <Paper
+                elevation={3}
+                sx={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  mt: 1,
+                  maxHeight: 400,
+                  overflow: 'auto',
+                  zIndex: 1200,
+                  display: showResults && searchResults.length > 0 ? 'block' : 'none',
+                }}
+              >
+                <List dense>
+                  {searchResults.map((anime) => (
+                    <ListItem 
+                      key={anime._id} 
+                      disablePadding
+                      onClick={() => handleResultClick(anime._id)}
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                          cursor: 'pointer',
+                        },
+                      }}
+                    >
+                      <ListItemButton>
+                        <ListItemAvatar>
+                          <MuiAvatar
+                            alt={anime.title}
+                            src={anime.poster}
+                            variant="rounded"
+                            sx={{ width: 40, height: 60, mr: 2 }}
+                          />
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={anime.title}
+                          secondary={`${anime.type} • ${anime.episodes || '?'} eps`}
+                          primaryTypographyProps={{
+                            noWrap: true,
+                            fontWeight: 'medium',
+                          }}
+                          secondaryTypographyProps={{
+                            noWrap: true,
+                            variant: 'caption',
+                          }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </Fade>
+          </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             {user && (

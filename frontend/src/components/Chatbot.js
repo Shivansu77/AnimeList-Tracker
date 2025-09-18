@@ -11,7 +11,7 @@ import {
   List,
   ListItem,
   ListItemAvatar,
-  ListItemText,
+
   Divider
 } from '@mui/material';
 import {
@@ -24,7 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
 const Chatbot = () => {
-  const { isAuthenticated } = useAuth();
+  const { } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {

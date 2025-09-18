@@ -137,7 +137,7 @@ const Dashboard = () => {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={4}><Paper elevation={2} sx={{ p: 3, textAlign: 'center' }}><Typography variant="h6">Total Anime</Typography><Typography variant="h3">{stats?.totalAnime || 0}</Typography></Paper></Grid>
         <Grid item xs={12} md={4}><Paper elevation={2} sx={{ p: 3, textAlign: 'center' }}><Typography variant="h6">Episodes Watched</Typography><Typography variant="h3">{stats?.totalEpisodesWatched || 0}</Typography></Paper></Grid>
-        <Grid item xs={12} md={4}><Paper elevation={2} sx={{ p: 3, textAlign: 'center' }}><Typography variant="h6">Days Watched</Typography><Typography variant="h3">{((stats?.totalEpisodesWatched || 0) * 24 / (24 * 60)).toFixed(1)}</Typography></Paper></Grid>
+        <Grid item xs={12} md={4}><Paper elevation={2} sx={{ p: 3, textAlign: 'center' }}><Typography variant="h6">Days Watched</Typography><Typography variant="h3">{((stats?.totalEpisodesWatched || 0) * 24 / (60 * 24)).toFixed(1)}</Typography></Paper></Grid>
       </Grid>
       
       <Grid container spacing={4}>

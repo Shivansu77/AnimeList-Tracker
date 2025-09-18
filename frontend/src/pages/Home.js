@@ -53,6 +53,7 @@ const Home = () => {
   });
   const [newComment, setNewComment] = useState({});
   const [posts, setPosts] = useState([]);
+  const [recentReviews, setRecentReviews] = useState([]);
   const [notifications, setNotifications] = useState(() => {
     if (!user) return [];
     const saved = localStorage.getItem(`animeTracker_notifications_${user.username}`);
@@ -136,36 +137,15 @@ const Home = () => {
     }
   ];
 
-  const recentReviews = [
-    { 
-      title: 'Frieren: Beyond Journey\'s End', 
-      author: 'AnimeExpert2024', 
-      rating: 10, 
-      excerpt: 'A masterpiece that redefines what fantasy anime can be. The character development and emotional depth are unparalleled...',
-      avatar: 'AE'
-    },
-    { 
-      title: 'Solo Leveling', 
-      author: 'ManhwaReader', 
-      rating: 9, 
-      excerpt: 'Incredible adaptation of the webtoon. The animation quality and fight scenes are absolutely stunning...',
-      avatar: 'MR'
-    },
-    { 
-      title: 'Chainsaw Man', 
-      author: 'CriticalOtaku', 
-      rating: 9, 
-      excerpt: 'Dark, brutal, and beautifully animated. MAPPA outdid themselves with this adaptation...',
-      avatar: 'CO'
-    }
-  ];
+
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [animeResponse, postsResponse] = await Promise.all([
+        const [animeResponse, postsResponse, reviewsResponse] = await Promise.all([
           animeService.getAll({ limit: 4 }),
-          postService.getAll()
+          postService.getAll(),
+fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/users/recent-reviews`).then(res => res.json()).catch(() => [])
         ]);
         
         const animeData = animeResponse.data?.anime || animeResponse.data || [];
@@ -176,9 +156,11 @@ const Home = () => {
         }
         
         setPosts(postsResponse.data || []);
+        setRecentReviews(Array.isArray(reviewsResponse) ? reviewsResponse : []);
       } catch (error) {
         setTrendingAnime(realTrendingAnime);
         setPosts([]);
+        setRecentReviews([]);
       } finally {
         setLoading(false);
         setPostsLoading(false);
@@ -589,30 +571,36 @@ const Home = () => {
               </Typography>
             </Box>
             
-            {recentReviews.map((review, index) => (
-              <Box key={index} sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
-                    {review.avatar}
-                  </Avatar>
-                  <Typography variant="body2" fontWeight="bold">
-                    {review.author}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    {[...Array(review.rating)].map((_, i) => (
-                      <Star key={i} sx={{ fontSize: 12, color: 'warning.main' }} />
-                    ))}
+            {recentReviews.length > 0 ? (
+              recentReviews.map((review, index) => (
+                <Box key={index} sx={{ mb: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
+                      {review.avatar}
+                    </Avatar>
+                    <Typography variant="body2" fontWeight="bold">
+                      {review.author}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      {[...Array(review.rating)].map((_, i) => (
+                        <Star key={i} sx={{ fontSize: 12, color: 'warning.main' }} />
+                      ))}
+                    </Box>
                   </Box>
+                  <Typography variant="subtitle2" fontWeight="bold" color="primary">
+                    {review.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                    {review.excerpt}
+                  </Typography>
+                  {index < recentReviews.length - 1 && <Divider sx={{ mt: 1 }} />}
                 </Box>
-                <Typography variant="subtitle2" fontWeight="bold" color="primary">
-                  {review.title}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                  {review.excerpt}
-                </Typography>
-                {index < recentReviews.length - 1 && <Divider sx={{ mt: 1 }} />}
-              </Box>
-            ))}
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary" align="center">
+                No reviews yet. Be the first to write one!
+              </Typography>
+            )}
           </Paper>
 
           {/* Quick Actions */}

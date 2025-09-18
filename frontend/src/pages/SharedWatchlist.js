@@ -9,7 +9,19 @@ const SharedWatchlist = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadSharedWatchlist();
+    const loadData = async () => {
+      try {
+        const data = await watchlistShareService.getSharedWatchlist(shareToken);
+        setWatchlistData(data);
+      } catch (error) {
+        setError('Watchlist not found or not public');
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (shareToken) {
+      loadData();
+    }
   }, [shareToken]);
 
   const loadSharedWatchlist = async () => {
