@@ -61,8 +61,6 @@ const Register = () => {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters long';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-      newErrors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
     }
     
     // Confirm password validation
@@ -75,6 +73,8 @@ const Register = () => {
       return;
     }
     
+    setErrors({});
+    
     try {
       await register({ 
         username: formData.username, 
@@ -83,7 +83,7 @@ const Register = () => {
       });
       navigate('/anime');
     } catch (err) {
-      console.error('Registration failed:', err);
+      // Error handled in AuthContext
     }
   };
 

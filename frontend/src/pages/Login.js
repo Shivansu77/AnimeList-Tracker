@@ -47,12 +47,13 @@ const Login = () => {
       return;
     }
     
+    setErrors({});
+    
     try {
       await login(formData.email, formData.password);
       navigate('/anime');
     } catch (err) {
-      // Error is handled and set in AuthContext
-      console.error('Login failed:', err);
+      // Error handled in AuthContext
     }
   };
 

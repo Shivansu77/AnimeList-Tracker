@@ -13,7 +13,7 @@ cron.schedule('*/5 * * * *', async () => {
       reminderTime: { $lte: now },
       isSent: false,
       isActive: true
-    }).populate('userId animeId episodeId');
+    }).populate('userId animeId');
 
     for (const reminder of dueReminders) {
       await sendNotification(reminder);
