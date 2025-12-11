@@ -8,7 +8,7 @@ pkill -f "react-scripts start" 2>/dev/null || true
 
 # Start backend server
 echo "📡 Starting backend server..."
-cd backend && npm start &
+cd backend && npm run dev &
 BACKEND_PID=$!
 
 # Wait for backend to start
@@ -20,10 +20,10 @@ cd ../frontend && npm start &
 FRONTEND_PID=$!
 
 echo "✅ Servers started!"
-echo "📡 Backend: http://localhost:3003"
+echo "📡 Backend: http://localhost:5000"
 echo "🌐 Frontend: http://localhost:3000"
 echo ""
-echo "🔗 Test shared watchlist: http://localhost:3000/watchlist/test-token"
+echo "🔗 Access the app at: http://localhost:3000"
 echo ""
 echo "Press Ctrl+C to stop both servers"
 

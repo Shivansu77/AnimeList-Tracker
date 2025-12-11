@@ -33,13 +33,20 @@ const EpisodeReminderModal = ({ isOpen, onClose, anime, onSave }) => {
 
   const fetchNextEpisode = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3003/api'}/episodes/anime/${anime.mal_id}/next`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/episodes/anime/${anime.mal_id}/next`);
       if (response.ok) {
         const episode = await response.json();
         setNextEpisode(episode);
       }
     } catch (error) {
-      console.error('Error fetching next episode:', error);
+      /* 
+       * Next episode info is optional - user can still set reminders without it.
+       * Failed fetch doesn't prevent reminder creation, just limits auto-population.
+       * Logging only in development to avoid production console noise.
+       */
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Could not fetch next episode info (optional):', error);
+      }
     }
   };
 
@@ -55,13 +62,11 @@ const EpisodeReminderModal = ({ isOpen, onClose, anime, onSave }) => {
         customSchedule: reminderType === 'custom_schedule' ? customSchedule : undefined
       };
       
-      console.log('Sending reminder data:', reminderData);
       await reminderService.createReminder(reminderData);
       onSave();
       onClose();
       alert('Reminder set successfully!');
     } catch (error) {
-      console.error('Error setting reminder:', error);
       alert(`Failed to set reminder: ${error.message}`);
     } finally {
       setLoading(false);
