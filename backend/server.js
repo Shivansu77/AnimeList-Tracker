@@ -92,8 +92,15 @@ if (process.env.NODE_ENV === 'production') {
     etag: true
   }));
   
+  // Rate limiter for static file serving (prevents abuse of SPA routes)
+  const staticLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // Higher limit for static files
+    message: 'Too many requests, please try again later.',
+  });
+  
   // Handle React routing - return index.html for all non-API routes
-  app.get('*', (req, res) => {
+  app.get('*', staticLimiter, (req, res) => {
     const indexPath = path.join(buildPath, 'index.html');
     res.sendFile(indexPath, (err) => {
       if (err) {
