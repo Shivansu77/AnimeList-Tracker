@@ -33,7 +33,7 @@ const EpisodeReminderModal = ({ isOpen, onClose, anime, onSave }) => {
 
   const fetchNextEpisode = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3003/api'}/episodes/anime/${anime.mal_id}/next`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/episodes/anime/${anime.mal_id}/next`);
       if (response.ok) {
         const episode = await response.json();
         setNextEpisode(episode);

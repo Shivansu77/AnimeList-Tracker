@@ -61,14 +61,13 @@ const Chatbot = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:3003/api/chatbot/chat', { 
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/chatbot/chat`, { 
         message: inputMessage 
       }, {
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      console.log('Chatbot response:', response.data);
       
       const botMessage = {
         id: Date.now() + 1,
@@ -79,10 +78,9 @@ const Chatbot = () => {
 
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
-      console.error('Chatbot error:', error.response?.data || error.message);
       const errorMessage = {
         id: Date.now() + 1,
-        text: "Sorry, I'm having trouble connecting to my brain! 🤖 Make sure the backend server is running on port 3003.",
+        text: "Sorry, I'm having trouble connecting to my brain! 🤖 Please try again later.",
         isBot: true,
         timestamp: new Date()
       };
