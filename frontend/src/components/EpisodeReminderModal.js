@@ -39,7 +39,7 @@ const EpisodeReminderModal = ({ isOpen, onClose, anime, onSave }) => {
         setNextEpisode(episode);
       }
     } catch (error) {
-      console.error('Error fetching next episode:', error);
+      // Silent fail - next episode info is optional
     }
   };
 
@@ -55,13 +55,11 @@ const EpisodeReminderModal = ({ isOpen, onClose, anime, onSave }) => {
         customSchedule: reminderType === 'custom_schedule' ? customSchedule : undefined
       };
       
-      console.log('Sending reminder data:', reminderData);
       await reminderService.createReminder(reminderData);
       onSave();
       onClose();
       alert('Reminder set successfully!');
     } catch (error) {
-      console.error('Error setting reminder:', error);
       alert(`Failed to set reminder: ${error.message}`);
     } finally {
       setLoading(false);
