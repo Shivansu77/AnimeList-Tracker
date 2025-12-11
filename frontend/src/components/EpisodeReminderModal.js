@@ -39,7 +39,11 @@ const EpisodeReminderModal = ({ isOpen, onClose, anime, onSave }) => {
         setNextEpisode(episode);
       }
     } catch (error) {
-      // Silent fail - next episode info is optional
+      // Next episode info is optional - user can still set reminders without it
+      // Failed fetch doesn't prevent reminder creation, just limits auto-population
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Could not fetch next episode info (optional):', error);
+      }
     }
   };
 

@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 // Import routes
@@ -19,6 +20,18 @@ const streamingRoutes = require('./routes/streaming');
 const watchlistShareRoutes = require('./routes/watchlistShare');
 
 const app = express();
+
+// Rate limiting middleware
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiting to all API routes
+app.use('/api/', limiter);
 
 // Middleware
 const allowedOrigins = process.env.FRONTEND_URL 
@@ -71,10 +84,22 @@ require('./services/reminderScheduler');
 
 // Serve static assets in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '..', 'frontend', 'build')));
+  const buildPath = path.join(__dirname, '..', 'frontend', 'build');
   
+  // Serve static files with security headers
+  app.use(express.static(buildPath, {
+    maxAge: '1d',
+    etag: true
+  }));
+  
+  // Handle React routing - return index.html for all non-API routes
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'build', 'index.html'));
+    const indexPath = path.join(buildPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        res.status(500).send('Error loading application');
+      }
+    });
   });
 }
 
