@@ -21,10 +21,15 @@ const watchlistShareRoutes = require('./routes/watchlistShare');
 
 const app = express();
 
-// Rate limiting middleware
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const API_RATE_LIMIT = 100; // requests per window
+const STATIC_RATE_LIMIT = 200; // higher limit for static files
+
+// Rate limiting middleware for API routes
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  windowMs: RATE_LIMIT_WINDOW,
+  max: API_RATE_LIMIT,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -94,9 +99,11 @@ if (process.env.NODE_ENV === 'production') {
   
   // Rate limiter for static file serving (prevents abuse of SPA routes)
   const staticLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200, // Higher limit for static files
+    windowMs: RATE_LIMIT_WINDOW,
+    max: STATIC_RATE_LIMIT,
     message: 'Too many requests, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
   });
   
   // Handle React routing - return index.html for all non-API routes
@@ -104,7 +111,8 @@ if (process.env.NODE_ENV === 'production') {
     const indexPath = path.join(buildPath, 'index.html');
     res.sendFile(indexPath, (err) => {
       if (err) {
-        res.status(500).send('Error loading application');
+        console.error('Error serving index.html:', err);
+        res.status(500).send('Unable to load application. Please try again later.');
       }
     });
   });
